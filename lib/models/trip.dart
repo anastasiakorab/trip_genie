@@ -4,6 +4,8 @@ class Trip {
   final DateTime endDate;
   final double budget;
   final String interest;
+  final double? latitude;
+  final double? longitude;
 
   Trip({
     required this.city,
@@ -11,6 +13,8 @@ class Trip {
     required this.endDate,
     required this.budget,
     required this.interest,
+    this.latitude,
+    this.longitude,
   });
 
   int get days {

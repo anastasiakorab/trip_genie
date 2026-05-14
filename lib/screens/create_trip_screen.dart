@@ -1,5 +1,22 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import '../models/trip.dart';
+
+class LocationSuggestion {
+  final String title;
+  final double latitude;
+  final double longitude;
+
+  LocationSuggestion({
+    required this.title,
+    required this.latitude,
+    required this.longitude,
+  });
+}
 
 class CreateTripScreen extends StatefulWidget {
   final Function(Trip trip) onTripCreated;
@@ -14,14 +31,21 @@ class CreateTripScreen extends StatefulWidget {
 }
 
 class _CreateTripScreenState extends State<CreateTripScreen> {
-
   final _cityController = TextEditingController();
   final _budgetController = TextEditingController();
+  final _cityFocusNode = FocusNode();
 
   DateTime? _startDate;
   DateTime? _endDate;
 
+  double? _selectedLatitude;
+  double? _selectedLongitude;
+
   String _selectedInterest = 'Museums';
+
+  List<LocationSuggestion> _locationSuggestions = [];
+  bool _isSearchingLocation = false;
+  Timer? _debounce;
 
   final List<String> _interests = [
     'Museums',
@@ -35,7 +59,80 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   void dispose() {
     _cityController.dispose();
     _budgetController.dispose();
+    _cityFocusNode.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> _searchLocations(String query) async {
+    if (query.trim().length < 2) {
+      setState(() {
+        _locationSuggestions = [];
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearchingLocation = true;
+    });
+
+    final url = Uri.parse(
+      'https://geocoding-api.open-meteo.com/v1/search'
+      '?name=${Uri.encodeComponent(query)}'
+      '&count=8'
+      '&language=en'
+      '&format=json',
+    );
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final results = data['results'] as List<dynamic>? ?? [];
+
+        final suggestions = results.map((place) {
+          final name = place['name'] ?? '';
+          final admin1 = place['admin1'] ?? '';
+          final country = place['country'] ?? '';
+
+          final title = [
+            name,
+            if (admin1.toString().isNotEmpty) admin1,
+            if (country.toString().isNotEmpty) country,
+          ].join(', ');
+
+          return LocationSuggestion(
+            title: title,
+            latitude: (place['latitude'] as num).toDouble(),
+            longitude: (place['longitude'] as num).toDouble(),
+          );
+        }).toList();
+
+        setState(() {
+          _locationSuggestions = suggestions;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _locationSuggestions = [];
+      });
+    } finally {
+      setState(() {
+        _isSearchingLocation = false;
+      });
+    }
+  }
+
+  void _onCityChanged(String value) {
+    _selectedLatitude = null;
+    _selectedLongitude = null;
+
+    _debounce?.cancel();
+
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      _searchLocations(value);
+    });
   }
 
   Future<void> _pickStartDate() async {
@@ -83,15 +180,15 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   void _generateTrip() {
-
     if (_cityController.text.trim().isEmpty ||
         _budgetController.text.trim().isEmpty ||
         _startDate == null ||
-        _endDate == null) {
-
+        _endDate == null ||
+        _selectedLatitude == null ||
+        _selectedLongitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill all fields'),
+          content: Text('Please choose destination, dates and budget'),
         ),
       );
 
@@ -104,6 +201,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       endDate: _endDate!,
       budget: double.tryParse(_budgetController.text.trim()) ?? 0,
       interest: _selectedInterest,
+      latitude: _selectedLatitude,
+      longitude: _selectedLongitude,
     );
 
     widget.onTripCreated(trip);
@@ -111,7 +210,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     final duration = _startDate != null && _endDate != null
         ? _endDate!.difference(_startDate!).inDays + 1
         : null;
@@ -122,7 +220,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             const Text(
               'Create Trip',
               style: TextStyle(
@@ -130,9 +227,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
-
             const SizedBox(height: 8),
-
             const Text(
               'Tell us where and when you want to travel.',
               style: TextStyle(
@@ -140,29 +235,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 color: Color(0xFF64748B),
               ),
             ),
-
             const SizedBox(height: 28),
-
-            _inputCard(
-              child: TextField(
-                controller: _cityController,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  icon: Icon(
-                    Icons.location_city,
-                    color: Color(0xFF6D5DFF),
-                  ),
-                  labelText: 'Destination city',
-                  hintText: 'Example: Paris',
-                ),
-              ),
-            ),
-
+            _locationSearchCard(),
             const SizedBox(height: 16),
-
             Row(
               children: [
-
                 Expanded(
                   child: _dateCard(
                     title: 'Start date',
@@ -171,9 +248,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     onTap: _pickStartDate,
                   ),
                 ),
-
                 const SizedBox(width: 14),
-
                 Expanded(
                   child: _dateCard(
                     title: 'End date',
@@ -184,10 +259,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ],
             ),
-
             if (duration != null) ...[
               const SizedBox(height: 16),
-
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -196,14 +269,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
                 child: Row(
                   children: [
-
                     const Icon(
                       Icons.calendar_month,
                       color: Color(0xFF2563EB),
                     ),
-
                     const SizedBox(width: 12),
-
                     Text(
                       'Trip duration: $duration days',
                       style: const TextStyle(
@@ -215,9 +285,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ),
             ],
-
             const SizedBox(height: 16),
-
             _inputCard(
               child: TextField(
                 controller: _budgetController,
@@ -233,9 +301,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
             const Text(
               'Travel interest',
               style: TextStyle(
@@ -243,14 +309,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
-
             const SizedBox(height: 14),
-
             Wrap(
               spacing: 12,
               runSpacing: 12,
               children: _interests.map((interest) {
-
                 final selected = _selectedInterest == interest;
 
                 return ChoiceChip(
@@ -261,23 +324,18 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                       _selectedInterest = interest;
                     });
                   },
-
                   selectedColor: const Color(0xFFE0E7FF),
                   backgroundColor: Colors.white,
-
                   labelStyle: TextStyle(
                     color: selected
                         ? const Color(0xFF4338CA)
                         : const Color(0xFF475569),
-
                     fontWeight: FontWeight.w700,
                   ),
                 );
               }).toList(),
             ),
-
             const SizedBox(height: 36),
-
             SizedBox(
               width: double.infinity,
               height: 58,
@@ -303,6 +361,89 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _locationSearchCard() {
+    return Column(
+      children: [
+        _inputCard(
+          child: TextField(
+            controller: _cityController,
+            focusNode: _cityFocusNode,
+            onChanged: _onCityChanged,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              icon: const Icon(
+                Icons.location_city,
+                color: Color(0xFF6D5DFF),
+              ),
+              labelText: 'Destination city',
+              hintText: 'Where are you going?',
+              suffixIcon: _isSearchingLocation
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+        if (_locationSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _locationSuggestions.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final location = _locationSuggestions[index];
+
+                return ListTile(
+                  leading: const Icon(
+                    Icons.location_on_outlined,
+                    color: Color(0xFF6D5DFF),
+                  ),
+                  title: Text(
+                    location.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text('Destination'),
+                  onTap: () {
+                    setState(() {
+                      _cityController.text = location.title;
+                      _selectedLatitude = location.latitude;
+                      _selectedLongitude = location.longitude;
+                      _locationSuggestions = [];
+                    });
+
+                    FocusScope.of(context).unfocus();
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -338,14 +479,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             Icon(
               icon,
               color: const Color(0xFF6D5DFF),
             ),
-
             const SizedBox(height: 14),
-
             Text(
               title,
               style: const TextStyle(
@@ -353,9 +491,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 color: Color(0xFF64748B),
               ),
             ),
-
             const SizedBox(height: 6),
-
             Text(
               value,
               style: const TextStyle(
