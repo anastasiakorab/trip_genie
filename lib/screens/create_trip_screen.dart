@@ -41,7 +41,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   double? _selectedLatitude;
   double? _selectedLongitude;
 
-  String _selectedInterest = 'Museums';
+  final Set<String> _selectedInterests = {'Museums'};
 
   List<LocationSuggestion> _locationSuggestions = [];
   bool _isSearchingLocation = false;
@@ -175,7 +175,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Select date';
-
     return '${date.day}.${date.month}.${date.year}';
   }
 
@@ -191,7 +190,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           content: Text('Please choose destination, dates and budget'),
         ),
       );
-
       return;
     }
 
@@ -200,7 +198,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       startDate: _startDate!,
       endDate: _endDate!,
       budget: double.tryParse(_budgetController.text.trim()) ?? 0,
-      interest: _selectedInterest,
+      interests: _selectedInterests.toList(),
       latitude: _selectedLatitude,
       longitude: _selectedLongitude,
     );
@@ -227,7 +225,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
+
             const SizedBox(height: 8),
+
             const Text(
               'Tell us where and when you want to travel.',
               style: TextStyle(
@@ -235,9 +235,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 color: Color(0xFF64748B),
               ),
             ),
+
             const SizedBox(height: 28),
+
             _locationSearchCard(),
+
             const SizedBox(height: 16),
+
             Row(
               children: [
                 Expanded(
@@ -259,6 +263,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ],
             ),
+
             if (duration != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -285,7 +290,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ),
             ],
+
             const SizedBox(height: 16),
+
             _inputCard(
               child: TextField(
                 controller: _budgetController,
@@ -301,27 +308,48 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 30),
+
             const Text(
-              'Travel interest',
+              'Travel interests',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
               ),
             ),
+
+            const SizedBox(height: 8),
+
+            const Text(
+              'Choose one or more interests for your trip.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
             const SizedBox(height: 14),
+
             Wrap(
               spacing: 12,
               runSpacing: 12,
               children: _interests.map((interest) {
-                final selected = _selectedInterest == interest;
+                final selected = _selectedInterests.contains(interest);
 
                 return ChoiceChip(
                   label: Text(interest),
                   selected: selected,
                   onSelected: (_) {
                     setState(() {
-                      _selectedInterest = interest;
+                      if (selected) {
+                        if (_selectedInterests.length > 1) {
+                          _selectedInterests.remove(interest);
+                        }
+                      } else {
+                        _selectedInterests.add(interest);
+                      }
                     });
                   },
                   selectedColor: const Color(0xFFE0E7FF),
@@ -335,7 +363,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 );
               }).toList(),
             ),
+
             const SizedBox(height: 36),
+
             SizedBox(
               width: double.infinity,
               height: 58,
@@ -393,6 +423,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             ),
           ),
         ),
+
         if (_locationSuggestions.isNotEmpty) ...[
           const SizedBox(height: 8),
           Container(
