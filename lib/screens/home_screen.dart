@@ -11,476 +11,636 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final destinations = [
-      _Destination('Skopje', 'Macedonia', 'Alexander Square',
-          'https://images.unsplash.com/photo-1578305698944-874fa44d04c9?auto=format&fit=crop&w=900&q=80'),
-      _Destination('Ohrid', 'Macedonia', 'Kaneo, Lake Ohrid',
-          'https://images.unsplash.com/photo-1605522561233-768ad7a8fabf?auto=format&fit=crop&w=900&q=80'),
-      _Destination('Paris', 'France', 'Eiffel Tower',
-          'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=900&q=80'),
-      _Destination('Louvre Museum', 'Paris, France', 'Famous museum',
-          'https://images.unsplash.com/photo-1565099824688-e93eb20fe622?auto=format&fit=crop&w=900&q=80'),
-      _Destination('Barcelona', 'Spain', 'Sagrada Família',
-          'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=900&q=80'),
-      _Destination('New York', 'USA', 'Manhattan Skyline',
-          'https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=900&q=80'),
+      _Destination.asset(
+        city: 'Ohrid',
+        country: 'Macedonia',
+        label: 'Kaneo, Lake Ohrid',
+        imagePath: 'assets/images/kaneo.jpg',
+      ),
+      _Destination.asset(
+        city: 'Skopje',
+        country: 'Macedonia',
+        label: 'Alexander the Great Monument',
+        imagePath: 'assets/images/skopje_alexander.jpg',
+      ),
+      _Destination.network(
+        city: 'Paris',
+        country: 'France',
+        label: 'Eiffel Tower',
+        imageUrl:
+            'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'Barcelona',
+        country: 'Spain',
+        label: 'Sagrada Família',
+        imageUrl:
+            'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'New York',
+        country: 'USA',
+        label: 'Manhattan Skyline',
+        imageUrl:
+            'https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'Tokyo',
+        country: 'Japan',
+        label: 'City lights',
+        imageUrl:
+            'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'Rome',
+        country: 'Italy',
+        label: 'Colosseum',
+        imageUrl:
+            'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'Dubai',
+        country: 'UAE',
+        label: 'Modern skyline',
+        imageUrl:
+            'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'London',
+        country: 'United Kingdom',
+        label: 'Big Ben & London Eye',
+        imageUrl:
+            'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1200&q=80',
+      ),
+      _Destination.network(
+        city: 'Singapore',
+        country: 'Singapore',
+        label: 'Marina Bay Sands',
+        imageUrl:
+            'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=1200&q=80',
+      ),
     ];
 
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(),
-            const SizedBox(height: 24),
-            _hero(),
-            const SizedBox(height: 26),
-            const Text(
-              'Popular Destinations ✨',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 285,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFF8FAFC),
+              Color(0xFFEDE9FE),
+              Color(0xFFFDF2F8),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 110),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _header(),
+              const SizedBox(height: 24),
+              _hero(),
+              const SizedBox(height: 28),
+              _sectionTitle(),
+              const SizedBox(height: 18),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: destinations.length,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 310,
+                  mainAxisSpacing: 18,
+                  crossAxisSpacing: 18,
+                  childAspectRatio: 1.05,
+                ),
                 itemBuilder: (context, index) {
                   return _destinationCard(destinations[index]);
                 },
               ),
-            ),
-            const SizedBox(height: 26),
-            _features(),
-          ],
+              const SizedBox(height: 28),
+              _whyTripGenie(),
+              const SizedBox(height: 22),
+              _footerSection(),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _header() {
-    return Row(
-      children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'TripGenie ✈️',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'Plan smarter trips with AI-powered itineraries.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        color: Colors.white.withOpacity(0.88),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-        ),
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF6D5DFF),
+                  Color(0xFFEC4899),
+                ],
               ),
-            ],
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.flight_takeoff_rounded,
+              color: Colors.white,
+              size: 30,
+            ),
           ),
-          child: const Icon(
-            Icons.person_outline,
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TripGenie ✈️',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'AI-powered travel planner',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.auto_awesome,
             color: Color(0xFF6D5DFF),
+            size: 30,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _hero() {
     return Container(
-      height: 340,
       width: double.infinity,
+      padding: const EdgeInsets.all(34),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(36),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF312E81),
+            Color(0xFF6D5DFF),
+            Color(0xFFEC4899),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6D5DFF).withOpacity(0.30),
+            color: const Color(0xFF6D5DFF).withOpacity(0.34),
             blurRadius: 30,
-            offset: const Offset(0, 14),
+            offset: const Offset(0, 16),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(34),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.network(
-                'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80',
-                fit: BoxFit.cover,
-              ),
-            ),
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      const Color(0xFF312E81).withOpacity(0.95),
-                      const Color(0xFF6D5DFF).withOpacity(0.78),
-                      Colors.black.withOpacity(0.25),
-                    ],
+      child: Row(
+        children: [
+          Expanded(
+            flex: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.travel_explore,
+                  color: Colors.white,
+                  size: 54,
+                ),
+                const SizedBox(height: 22),
+                const Text(
+                  'Plan your next\nadventure beautifully',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 44,
+                    height: 1.06,
+                    fontWeight: FontWeight.w900,
                   ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Choose a destination, select your interests, and let TripGenie build a smart itinerary with real places, photos, weather and budget logic.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: 245,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: onCreateTripPressed,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text(
+                      'Start Planning',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF6D5DFF),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 28),
+          Expanded(
+            flex: 4,
+            child: Container(
+              height: 280,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.25),
+                ),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.public,
+                  color: Colors.white,
+                  size: 120,
                 ),
               ),
             ),
-            Positioned(
-              left: 34,
-              top: 38,
-              bottom: 38,
-              width: 520,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.travel_explore,
-                    color: Colors.white,
-                    size: 50,
-                  ),
-                  const SizedBox(height: 22),
-                  const Text(
-                    'Your next adventure\nstarts here ✨',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 44,
-                      height: 1.05,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Discover amazing places, get AI-powered itineraries, real photos, weather forecast and smart budget planning.',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      height: 1.45,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: 270,
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: onCreateTripPressed,
-                      icon: const Icon(Icons.auto_awesome),
-                      label: const Text(
-                        'Start Planning Your Trip',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF6D5DFF),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              right: 45,
-              bottom: 26,
-              child: Row(
-                children: [
-                  _heroMiniImage(
-                    'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=500&q=80',
-                    'Paris',
-                  ),
-                  _heroMiniImage(
-                    'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=500&q=80',
-                    'Barcelona',
-                  ),
-                  _heroMiniImage(
-                    'https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=500&q=80',
-                    'New York',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _heroMiniImage(String image, String text) {
+  Widget _sectionTitle() {
     return Container(
-      width: 110,
-      height: 135,
-      margin: const EdgeInsets.only(left: 14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.35)),
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(28),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(image, fit: BoxFit.cover),
-            Container(
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Explore beautiful destinations',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Start from Macedonia or discover the most popular cities around the world.',
+            style: TextStyle(
+              fontSize: 15,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _destinationCard(_Destination destination) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: destination.isAsset
+                ? Image.asset(
+                    destination.imagePath,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _imageFallback(destination.city);
+                    },
+                  )
+                : Image.network(
+                    destination.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _imageFallback(destination.city);
+                    },
+                  ),
+          ),
+          Positioned.fill(
+            child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.70),
+                    Colors.black.withOpacity(0.06),
+                    Colors.black.withOpacity(0.82),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
               ),
             ),
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
+          ),
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.35),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.favorite_border,
+                color: Colors.white,
+                size: 22,
               ),
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  destination.city,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      color: Color(0xFFC4B5FD),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      destination.country,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _destinationCard(_Destination destination) {
+  Widget _whyTripGenie() {
     return Container(
-      width: 260,
-      margin: const EdgeInsets.only(right: 18),
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(30),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF111827),
+            Color(0xFF312E81),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Why choose TripGenie? ✨',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Your AI-powered assistant for smarter and more beautiful travel experiences.',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 15,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _statCard(
+                  icon: Icons.public,
+                  title: '50+',
+                  subtitle: 'Destinations',
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.auto_awesome,
+                  title: 'AI',
+                  subtitle: 'Smart planning',
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.cloud,
+                  title: 'Live',
+                  subtitle: 'Weather',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.10),
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 34),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footerSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.network(
-                destination.imageUrl,
-                fit: BoxFit.cover,
-              ),
-            ),
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.black.withOpacity(0.04),
-                      Colors.black.withOpacity(0.82),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 14,
-              right: 14,
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.35),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.favorite_border,
-                  color: Colors.white,
-                  size: 21,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 18,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    destination.city,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 23,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on,
-                        color: Color(0xFFA78BFA),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        destination.country,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF6D5DFF),
+                  Color(0xFFEC4899),
                 ],
               ),
+              borderRadius: BorderRadius.circular(20),
             ),
-          ],
-        ),
+            child: const Icon(
+              Icons.flight_takeoff_rounded,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 18),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ready for your next adventure?',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Create a smart itinerary and explore the world with TripGenie.',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _features() {
+  Widget _imageFallback(String title) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: const Row(
-        children: [
-          Expanded(
-            child: _FeatureItem(
-              icon: Icons.cloud_outlined,
-              title: 'Weather-ready',
-              text: 'Plans based on forecast',
-            ),
-          ),
-          Expanded(
-            child: _FeatureItem(
-              icon: Icons.place_outlined,
-              title: 'Real places',
-              text: 'Google Places locations',
-            ),
-          ),
-          Expanded(
-            child: _FeatureItem(
-              icon: Icons.payments_outlined,
-              title: 'Budget logic',
-              text: 'Smart daily estimates',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FeatureItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String text;
-
-  const _FeatureItem({
-    required this.icon,
-    required this.title,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE0E7FF),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF6D5DFF),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
+      color: const Color(0xFFE0E7FF),
+      child: Center(
+        child: Text(
           title,
-          textAlign: TextAlign.center,
           style: const TextStyle(
+            color: Color(0xFF4338CA),
             fontWeight: FontWeight.w900,
-            color: Color(0xFF0F172A),
+            fontSize: 22,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -490,11 +650,22 @@ class _Destination {
   final String country;
   final String label;
   final String imageUrl;
+  final String imagePath;
+  final bool isAsset;
 
-  const _Destination(
-    this.city,
-    this.country,
-    this.label,
-    this.imageUrl,
-  );
+  const _Destination.network({
+    required this.city,
+    required this.country,
+    required this.label,
+    required this.imageUrl,
+  })  : imagePath = '',
+        isAsset = false;
+
+  const _Destination.asset({
+    required this.city,
+    required this.country,
+    required this.label,
+    required this.imagePath,
+  })  : imageUrl = '',
+        isAsset = true;
 }
