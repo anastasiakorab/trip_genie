@@ -5,18 +5,15 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/trip.dart';
-
-const String geoapifyApiKey = '6094893db87b4f96bcc1651909807c41';
+import '../services/google_places_service.dart';
 
 class WeatherDay {
-  final String date;
   final double maxTemp;
   final double minTemp;
   final int rainProbability;
   final int weatherCode;
 
   WeatherDay({
-    required this.date,
     required this.maxTemp,
     required this.minTemp,
     required this.rainProbability,
@@ -30,7 +27,8 @@ class PlaceSuggestion {
   final double latitude;
   final double longitude;
   final String category;
-  final int? distance;
+  final double? rating;
+  final String? imageUrl;
 
   PlaceSuggestion({
     required this.name,
@@ -38,7 +36,18 @@ class PlaceSuggestion {
     required this.latitude,
     required this.longitude,
     required this.category,
-    this.distance,
+    this.rating,
+    this.imageUrl,
+  });
+}
+
+class DayActivity {
+  final String timeLabel;
+  final PlaceSuggestion place;
+
+  DayActivity({
+    required this.timeLabel,
+    required this.place,
   });
 }
 
@@ -56,9 +65,9 @@ class PlanScreen extends StatefulWidget {
 
 class _PlanScreenState extends State<PlanScreen> {
   bool _isLoading = false;
-
   List<WeatherDay> _weatherDays = [];
   List<PlaceSuggestion> _places = [];
+  final Set<String> _usedPlacesGlobally = {};
 
   @override
   void initState() {
@@ -81,9 +90,9 @@ class _PlanScreenState extends State<PlanScreen> {
       _weatherDays = [];
       _places = [];
     });
-
+    _usedPlacesGlobally.clear();
     await _loadWeather();
-    await _loadPlaces();
+    await _loadGooglePlaces();
 
     setState(() {
       _isLoading = false;
@@ -91,11 +100,7 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 
   String _formatApiDate(DateTime date) {
-    final year = date.year.toString();
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '$year-$month-$day';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _loadWeather() async {
@@ -133,7 +138,6 @@ class _PlanScreenState extends State<PlanScreen> {
 
         _weatherDays = List.generate(dates.length, (index) {
           return WeatherDay(
-            date: dates[index].toString(),
             maxTemp: (maxTemps[index] as num).toDouble(),
             minTemp: (minTemps[index] as num).toDouble(),
             rainProbability: (rain[index] as num?)?.toInt() ?? 0,
@@ -146,20 +150,20 @@ class _PlanScreenState extends State<PlanScreen> {
     }
   }
 
-  String _geoapifyCategory(String interest) {
+  String _googleSearchQuery(String interest, String city) {
     switch (interest) {
       case 'Museums':
-        return 'entertainment.museum';
+        return 'best museums in $city';
       case 'Food':
-        return 'catering.restaurant';
+        return 'best restaurants in $city';
       case 'Nature':
-        return 'natural';
+        return 'best parks and gardens in $city';
       case 'Shopping':
-        return 'commercial.shopping_mall';
+        return 'best shopping places in $city';
       case 'Nightlife':
-        return 'entertainment.nightclub';
+        return 'best bars and nightlife in $city';
       default:
-        return 'tourism.sights';
+        return 'best places to visit in $city';
     }
   }
 
@@ -180,85 +184,304 @@ class _PlanScreenState extends State<PlanScreen> {
     }
   }
 
-  Future<void> _loadPlaces() async {
+  Future<void> _loadGooglePlaces() async {
     final trip = widget.trip;
 
     if (trip == null || trip.latitude == null || trip.longitude == null) {
       return;
     }
 
-    final List<PlaceSuggestion> allPlaces = [];
+    final cityName = trip.city.split(',').first;
+    final loadedPlaces = <PlaceSuggestion>[];
+    final usedPlaceIds = <String>{};
+    final usedPhotoNames = <String>{};
 
     for (final interest in trip.interests) {
-      final category = _geoapifyCategory(interest);
+      final query = _googleSearchQuery(interest, cityName);
 
       final url = Uri.parse(
-        'https://api.geoapify.com/v2/places'
-        '?categories=$category'
-        '&filter=circle:${trip.longitude},${trip.latitude},8000'
-        '&bias=proximity:${trip.longitude},${trip.latitude}'
-        '&limit=8'
-        '&apiKey=$geoapifyApiKey',
+        'https://places.googleapis.com/v1/places:searchText',
       );
 
+      final body = {
+        'textQuery': query,
+        'maxResultCount': 20,
+        'languageCode': 'en',
+        'locationBias': {
+          'circle': {
+            'center': {
+              'latitude': trip.latitude,
+              'longitude': trip.longitude,
+            },
+            'radius': 12000.0,
+          }
+        }
+      };
+
       try {
-        final response = await http.get(url);
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': googleApiKey,
+            'X-Goog-FieldMask':
+                'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos',
+          },
+          body: jsonEncode(body),
+        );
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          final features = data['features'] as List<dynamic>? ?? [];
+          final places = data['places'] as List<dynamic>? ?? [];
 
-          final places = features.map((feature) {
-            final props = feature['properties'];
-            final geometry = feature['geometry'];
-            final coordinates = geometry['coordinates'] as List<dynamic>;
+          for (final place in places) {
+            final id = place['id']?.toString();
 
-            return PlaceSuggestion(
-              name: props['name'] ?? 'Unknown place',
-              address: props['formatted'] ?? '',
-              latitude: (coordinates[1] as num).toDouble(),
-              longitude: (coordinates[0] as num).toDouble(),
-              category: interest,
-              distance: props['distance'] is num
-                  ? (props['distance'] as num).round()
-                  : null,
+            if (id == null || usedPlaceIds.contains(id)) {
+              continue;
+            }
+
+            usedPlaceIds.add(id);
+
+            final displayName = place['displayName'];
+            final location = place['location'];
+            final photos = place['photos'] as List<dynamic>? ?? [];
+
+            String? imageUrl;
+
+            for (final photo in photos) {
+                final photoName = photo['name'];
+
+                if (photoName != null && !usedPhotoNames.contains(photoName)) {
+                usedPhotoNames.add(photoName);
+
+                imageUrl =
+                'https://places.googleapis.com/v1/$photoName/media?maxWidthPx=900&key=$googleApiKey';
+
+            break;
+      }
+  }
+
+            loadedPlaces.add(
+              PlaceSuggestion(
+                name: displayName?['text'] ?? 'Place to visit',
+                address: place['formattedAddress'] ?? '',
+                latitude: (location?['latitude'] as num?)?.toDouble() ?? 0,
+                longitude: (location?['longitude'] as num?)?.toDouble() ?? 0,
+                category: interest,
+                rating: (place['rating'] as num?)?.toDouble(),
+                imageUrl: imageUrl,
+              ),
             );
-          }).toList();
-
-          allPlaces.addAll(places);
+          }
         }
       } catch (e) {
         continue;
       }
     }
 
-    _places = allPlaces;
+    _places = loadedPlaces;
   }
 
-  List<PlaceSuggestion> _placesForDay(int dayIndex) {
-    if (_places.isEmpty) return [];
+  List<PlaceSuggestion> _placesByCategory(String category) {
+    return _places.where((place) => place.category == category).toList();
+  }
 
-    final start = dayIndex * 2;
-    final result = <PlaceSuggestion>[];
+  PlaceSuggestion? _pickPlace(
+  String category,
+  int index,
+  Set<String> usedToday,
+) {
+  final places = _placesByCategory(category);
 
-    for (int i = 0; i < 2; i++) {
-      final index = (start + i) % _places.length;
-      result.add(_places[index]);
+  if (places.isEmpty) return null;
+
+  for (int i = 0; i < places.length; i++) {
+    final place = places[(index + i) % places.length];
+
+   if (!usedToday.contains(place.name) &&
+    !_usedPlacesGlobally.contains(place.name)) {
+
+  usedToday.add(place.name);
+  _usedPlacesGlobally.add(place.name);
+
+  return place;
+}
+  }
+
+  return null;
+}
+
+  List<DayActivity> _activitiesForDay(int dayIndex, Trip trip) {
+    final activities = <DayActivity>[];
+    final usedToday = <String>{};
+
+    final selected = trip.interests;
+    final hasFood = selected.contains('Food');
+    final hasNightlife = selected.contains('Nightlife');
+
+    final mainInterests = selected
+        .where((interest) => interest != 'Food' && interest != 'Nightlife')
+        .toList();
+
+    if (mainInterests.isEmpty && !hasFood && !hasNightlife) {
+      mainInterests.add('Museums');
     }
 
-    return result;
+    if (mainInterests.isNotEmpty) {
+      final morningCategory = mainInterests[dayIndex % mainInterests.length];
+      final morningPlace = _pickPlace(morningCategory, dayIndex * 3, usedToday);
+
+      if (morningPlace != null) {
+        activities.add(
+          DayActivity(
+            timeLabel: 'Morning visit',
+            place: morningPlace,
+          ),
+        );
+      }
+    }
+
+    if (hasFood) {
+      final lunchPlace = _pickPlace('Food', dayIndex * 4, usedToday);
+
+      if (lunchPlace != null) {
+        activities.add(
+          DayActivity(
+            timeLabel: 'Lunch stop',
+            place: lunchPlace,
+          ),
+        );
+      }
+    }
+
+    if (mainInterests.length > 1) {
+      final afternoonCategory =
+          mainInterests[(dayIndex + 1) % mainInterests.length];
+      final afternoonPlace = _pickPlace(afternoonCategory, dayIndex * 5, usedToday);
+
+      if (afternoonPlace != null) {
+        activities.add(
+          DayActivity(
+            timeLabel: 'Afternoon activity',
+            place: afternoonPlace,
+          ),
+        );
+      }
+    } else if (mainInterests.length == 1) {
+      final afternoonPlace = _pickPlace(mainInterests.first, dayIndex * 5 + 1, usedToday);
+
+      if (afternoonPlace != null &&
+          activities.every(
+            (activity) => activity.place.name != afternoonPlace.name,
+          )) {
+        activities.add(
+          DayActivity(
+            timeLabel: 'Afternoon activity',
+            place: afternoonPlace,
+          ),
+        );
+      }
+    }
+
+    if (hasNightlife) {
+      final eveningPlace = _pickPlace('Nightlife', dayIndex * 6, usedToday);
+
+      if (eveningPlace != null) {
+        activities.add(
+          DayActivity(
+            timeLabel: 'Evening activity',
+            place: eveningPlace,
+          ),
+        );
+      }
+    } else if (hasFood && activities.length < 3) {
+      final dinnerPlace = _pickPlace('Food', dayIndex * 7 + 2, usedToday);
+
+      if (dinnerPlace != null &&
+          activities.every(
+            (activity) => activity.place.name != dinnerPlace.name,
+          )) {
+        activities.add(
+          DayActivity(
+            timeLabel: 'Dinner idea',
+            place: dinnerPlace,
+          ),
+        );
+      }
+    }
+
+    if (activities.isEmpty && _places.isNotEmpty) {
+      final fallbackCount = trip.days <= 2 ? 4 : 3;
+
+      for (int i = 0; i < fallbackCount; i++) {
+        final place = _places[(dayIndex * fallbackCount + i) % _places.length];
+
+        activities.add(
+          DayActivity(
+            timeLabel: _timeLabelForIndex(i, place.category),
+            place: place,
+          ),
+        );
+      }
+    }
+
+    return activities.take(4).toList();
+  }
+
+  String _timeLabelForIndex(int index, String category) {
+    if (category == 'Food' && index <= 1) return 'Lunch stop';
+    if (category == 'Nightlife') return 'Evening activity';
+
+    switch (index) {
+      case 0:
+        return 'Morning visit';
+      case 1:
+        return 'Lunch stop';
+      case 2:
+        return 'Afternoon activity';
+      default:
+        return 'Evening idea';
+    }
   }
 
   Future<void> _openInMaps(PlaceSuggestion place) async {
-    final query = Uri.encodeComponent('${place.name} ${place.address}');
     final url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$query',
+      'https://www.google.com/maps/search/?api=1'
+      '&query=${place.latitude},${place.longitude}',
     );
 
     await launchUrl(
       url,
       mode: LaunchMode.externalApplication,
     );
+  }
+
+  String _budgetStyle(double dailyBudget) {
+    if (dailyBudget < 80) {
+      return 'Budget-friendly';
+    } else if (dailyBudget < 200) {
+      return 'Balanced';
+    } else {
+      return 'Premium';
+    }
+  }
+
+  Color _budgetColor(double dailyBudget) {
+    if (dailyBudget < 80) {
+      return const Color(0xFF16A34A);
+    } else if (dailyBudget < 200) {
+      return const Color(0xFF2563EB);
+    } else {
+      return const Color(0xFF9333EA);
+    }
+  }
+
+  String _estimatedDayCost(double dailyBudget) {
+    final min = (dailyBudget * 0.8).round();
+    final max = (dailyBudget * 1.2).round();
+
+    return '\$$min - \$$max';
   }
 
   String _weatherIcon(int code) {
@@ -291,16 +514,16 @@ class _PlanScreenState extends State<PlanScreen> {
       );
     }
 
+    final dailyBudget = trip.budget / trip.days;
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _heroCard(trip),
-
+            _heroCard(trip, dailyBudget),
             const SizedBox(height: 30),
-
             const Text(
               'Your daily trip plan',
               style: TextStyle(
@@ -308,20 +531,16 @@ class _PlanScreenState extends State<PlanScreen> {
                 fontWeight: FontWeight.w900,
               ),
             ),
-
             const SizedBox(height: 8),
-
             const Text(
-              'Places are selected based on your interests and grouped by day.',
+              'Each day is organized into morning, lunch, afternoon and evening activities.',
               style: TextStyle(
                 fontSize: 15,
                 color: Color(0xFF64748B),
                 fontWeight: FontWeight.w600,
               ),
             ),
-
             const SizedBox(height: 16),
-
             if (_isLoading)
               const Center(
                 child: Padding(
@@ -333,12 +552,14 @@ class _PlanScreenState extends State<PlanScreen> {
               ...List.generate(trip.days, (index) {
                 final weather =
                     index < _weatherDays.length ? _weatherDays[index] : null;
-                final places = _placesForDay(index);
+
+                final activities = _activitiesForDay(index, trip);
 
                 return _dayPlanCard(
                   dayNumber: index + 1,
                   weather: weather,
-                  places: places,
+                  activities: activities,
+                  dailyBudget: dailyBudget,
                 );
               }),
           ],
@@ -347,7 +568,7 @@ class _PlanScreenState extends State<PlanScreen> {
     );
   }
 
-  Widget _heroCard(Trip trip) {
+  Widget _heroCard(Trip trip, double dailyBudget) {
     final cityName = trip.city.split(',').first;
 
     return Container(
@@ -390,9 +611,7 @@ class _PlanScreenState extends State<PlanScreen> {
                   size: 31,
                 ),
               ),
-
               const SizedBox(width: 16),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,9 +639,7 @@ class _PlanScreenState extends State<PlanScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 28),
-
           Row(
             children: [
               Expanded(
@@ -442,34 +659,51 @@ class _PlanScreenState extends State<PlanScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+              color: _budgetColor(dailyBudget).withOpacity(0.22),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.15),
-              ),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.attach_money,
-                  color: Colors.white,
-                ),
+                const Icon(Icons.auto_awesome, color: Colors.white),
                 const SizedBox(width: 10),
-                Text(
-                  '\$${trip.budget.toStringAsFixed(0)} Budget',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+                Expanded(
+                  child: Text(
+                    '${_budgetStyle(dailyBudget)} budget travel style',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.attach_money, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '\$${trip.budget.toStringAsFixed(0)} Budget • ${_estimatedDayCost(dailyBudget)} / day',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ],
@@ -490,18 +724,12 @@ class _PlanScreenState extends State<PlanScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.14),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: Colors.white,
-            size: 22,
-          ),
+          Icon(icon, color: Colors.white, size: 22),
           const SizedBox(height: 10),
           Text(
             title,
@@ -530,7 +758,8 @@ class _PlanScreenState extends State<PlanScreen> {
   Widget _dayPlanCard({
     required int dayNumber,
     required WeatherDay? weather,
-    required List<PlaceSuggestion> places,
+    required List<DayActivity> activities,
+    required double dailyBudget,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
@@ -568,9 +797,7 @@ class _PlanScreenState extends State<PlanScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,23 +817,29 @@ class _PlanScreenState extends State<PlanScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Estimated daily cost: ${_estimatedDayCost(dailyBudget)}',
+                      style: const TextStyle(
+                        color: Color(0xFF6D5DFF),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
               ),
-
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: _budgetColor(dailyBudget).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(30),
                 ),
-                child: const Text(
-                  'Smart day',
+                child: Text(
+                  _budgetStyle(dailyBudget),
                   style: TextStyle(
-                    color: Color(0xFF2563EB),
+                    color: _budgetColor(dailyBudget),
                     fontWeight: FontWeight.w900,
                     fontSize: 12,
                   ),
@@ -614,10 +847,8 @@ class _PlanScreenState extends State<PlanScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          if (places.isEmpty)
+          if (activities.isEmpty)
             const Text(
               'No places found for this day.',
               style: TextStyle(
@@ -627,12 +858,8 @@ class _PlanScreenState extends State<PlanScreen> {
             )
           else
             Column(
-              children: places.asMap().entries.map((entry) {
-                final index = entry.key;
-                final place = entry.value;
-                final timeLabel = index == 0 ? 'Morning visit' : 'Afternoon visit';
-
-                return _placeMiniCard(place, timeLabel);
+              children: activities.map((activity) {
+                return _placeMiniCard(activity.place, activity.timeLabel);
               }).toList(),
             ),
         ],
@@ -640,99 +867,157 @@ class _PlanScreenState extends State<PlanScreen> {
     );
   }
 
-  Widget _placeMiniCard(PlaceSuggestion place, String timeLabel) {
-    final distanceText = place.distance == null
-        ? 'Recommended place'
-        : '${(place.distance! / 1000).toStringAsFixed(1)} km from center';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
+ Widget _placeMiniCard(PlaceSuggestion place, String timeLabel) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    height: 260,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(26),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.08),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: Stack(
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0E7FF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              _interestIcon(place.category),
-              color: const Color(0xFF4338CA),
+          Positioned.fill(
+            child: place.imageUrl != null
+                ? Image.network(
+                    place.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _imageFallback(place.category);
+                    },
+                  )
+                : _imageFallback(place.category),
+          ),
+
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.10),
+                    Colors.black.withOpacity(0.72),
+                  ],
+                ),
+              ),
             ),
           ),
 
-          const SizedBox(width: 12),
-
-          Expanded(
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 18,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  timeLabel,
-                  style: const TextStyle(
-                    color: Color(0xFF6D5DFF),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
                   ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  place.name,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.25),
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  '${place.category} • $distanceText',
-                  style: const TextStyle(
-                    color: Color(0xFF475569),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  place.address,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
+                  child: Text(
+                    timeLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
 
                 const SizedBox(height: 10),
 
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openInMaps(place),
-                    icon: const Icon(Icons.map_outlined, size: 18),
-                    label: const Text(
-                      'Open in Maps',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                Text(
+                  place.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                Row(
+                  children: [
+                    Icon(
+                      _interestIcon(place.category),
+                      color: Colors.white,
+                      size: 18,
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4338CA),
-                      side: const BorderSide(color: Color(0xFFC7D2FE)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                    const SizedBox(width: 6),
+                    Text(
+                      place.category,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
+                    if (place.rating != null) ...[
+                      const SizedBox(width: 12),
+                      const Icon(
+                        Icons.star_rounded,
+                        color: Color(0xFFFBBF24),
+                        size: 20,
+                      ),
+                      Text(
+                        place.rating!.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+
+                const SizedBox(height: 6),
+
+                Text(
+                  place.address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                OutlinedButton.icon(
+                  onPressed: () => _openInMaps(place),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text(
+                    'Open in Maps',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(
+                      color: Colors.white.withOpacity(0.65),
+                    ),
+                    backgroundColor: Colors.white.withOpacity(0.12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
@@ -740,6 +1025,20 @@ class _PlanScreenState extends State<PlanScreen> {
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+  Widget _imageFallback(String category) {
+    return Container(
+      height: 180,
+      width: double.infinity,
+      color: const Color(0xFFE0E7FF),
+      child: Icon(
+        _interestIcon(category),
+        color: const Color(0xFF4338CA),
+        size: 46,
       ),
     );
   }
