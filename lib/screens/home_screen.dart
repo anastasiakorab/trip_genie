@@ -14,13 +14,13 @@ class HomeScreen extends StatelessWidget {
       _Destination.asset(
         city: 'Ohrid',
         country: 'Macedonia',
-        label: 'Kaneo, Lake Ohrid',
+        label: 'Church of St. John at Kaneo',
         imagePath: 'assets/images/kaneo.jpg',
       ),
       _Destination.asset(
         city: 'Skopje',
         country: 'Macedonia',
-        label: 'Alexander the Great Monument',
+        label: 'Stone Bridge & Macedonia Square',
         imagePath: 'assets/images/skopje_alexander.jpg',
       ),
       _Destination.network(
@@ -47,7 +47,7 @@ class HomeScreen extends StatelessWidget {
       _Destination.network(
         city: 'Tokyo',
         country: 'Japan',
-        label: 'City lights',
+        label: 'City Lights',
         imageUrl:
             'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80',
       ),
@@ -61,7 +61,7 @@ class HomeScreen extends StatelessWidget {
       _Destination.network(
         city: 'Dubai',
         country: 'UAE',
-        label: 'Modern skyline',
+        label: 'Modern Skyline',
         imageUrl:
             'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80',
       ),
@@ -95,7 +95,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 110),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -180,7 +180,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'AI-powered travel planner',
+                  'Your smart travel companion',
                   style: TextStyle(
                     fontSize: 15,
                     color: Color(0xFF64748B),
@@ -190,7 +190,7 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
+          Icon(
             Icons.auto_awesome,
             color: Color(0xFF6D5DFF),
             size: 30,
@@ -237,7 +237,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 const Text(
-                  'Plan your next\nadventure beautifully',
+                  'Build your perfect\ntrip in seconds',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 44,
@@ -247,7 +247,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Choose a destination, select your interests, and let TripGenie build a smart itinerary with real places, photos, weather and budget logic.',
+                  'Pick a destination, choose your interests, and get a personalized itinerary with places, weather and budget-friendly planning.',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 16,
@@ -287,6 +287,7 @@ class HomeScreen extends StatelessWidget {
             flex: 4,
             child: Container(
               height: 280,
+              padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.14),
                 borderRadius: BorderRadius.circular(30),
@@ -294,12 +295,35 @@ class HomeScreen extends StatelessWidget {
                   color: Colors.white.withOpacity(0.25),
                 ),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.public,
-                  color: Colors.white,
-                  size: 120,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.public,
+                    color: Colors.white,
+                    size: 92,
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'AI itinerary builder',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Real places • Live weather • Saved trips',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.72),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -320,7 +344,7 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Explore beautiful destinations',
+            'Popular destinations',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w900,
@@ -329,7 +353,7 @@ class HomeScreen extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'Start from Macedonia or discover the most popular cities around the world.',
+            'Choose a city inspiration or create your own custom trip.',
             style: TextStyle(
               fontSize: 15,
               color: Color(0xFF64748B),
@@ -377,23 +401,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            top: 14,
-            right: 14,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.35),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.favorite_border,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-          ),
+          
           Positioned(
             left: 18,
             right: 18,
@@ -475,7 +483,7 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Why choose TripGenie? ✨',
+            'Why TripGenie stands out ✨',
             style: TextStyle(
               color: Colors.white,
               fontSize: 28,
@@ -484,7 +492,7 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Your AI-powered assistant for smarter and more beautiful travel experiences.',
+            'Everything you need for a smarter trip is organized in one clean planner.',
             style: TextStyle(
               color: Colors.white70,
               fontSize: 15,
@@ -497,9 +505,9 @@ class HomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: _statCard(
-                  icon: Icons.public,
-                  title: '50+',
-                  subtitle: 'Destinations',
+                  icon: Icons.map_rounded,
+                  title: 'Real',
+                  subtitle: 'Places',
                 ),
               ),
               const SizedBox(width: 14),
@@ -507,13 +515,13 @@ class HomeScreen extends StatelessWidget {
                 child: _statCard(
                   icon: Icons.auto_awesome,
                   title: 'AI',
-                  subtitle: 'Smart planning',
+                  subtitle: 'Planning',
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: _statCard(
-                  icon: Icons.cloud,
+                  icon: Icons.cloud_rounded,
                   title: 'Live',
                   subtitle: 'Weather',
                 ),
@@ -570,7 +578,7 @@ class HomeScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(26),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.88),
+        color: Colors.white.withOpacity(0.90),
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
@@ -595,7 +603,7 @@ class HomeScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: const Icon(
-              Icons.flight_takeoff_rounded,
+              Icons.route_rounded,
               color: Colors.white,
             ),
           ),
@@ -605,7 +613,7 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ready for your next adventure?',
+                  'Ready to create your next route?',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -614,13 +622,34 @@ class HomeScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Create a smart itinerary and explore the world with TripGenie.',
+                  'Turn your destination into a complete day-by-day travel plan.',
                   style: TextStyle(
                     color: Color(0xFF64748B),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 18),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: onCreateTripPressed,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text(
+                'Create Trip',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6D5DFF),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
             ),
           ),
         ],

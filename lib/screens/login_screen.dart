@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../services/fake_auth_service.dart';
+import '../services/auth_service.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
-
   const LoginScreen({
     super.key,
-    required this.onLoginSuccess,
   });
 
   @override
@@ -22,30 +19,23 @@ class _LoginScreenState extends State<LoginScreen> {
   String? errorText;
   bool _isLoading = false;
 
-  void _login() {
+  Future<void> _login() async {
     setState(() {
       errorText = null;
       _isLoading = true;
     });
 
-    final error = FakeAuthService.login(
+    final error = await AuthService.login(
       email: emailController.text,
       password: passwordController.text,
     );
 
-    if (error != null) {
-      setState(() {
-        errorText = error;
-        _isLoading = false;
-      });
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
+      errorText = error;
     });
-
-    widget.onLoginSuccess();
   }
 
   @override
@@ -150,9 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => SignupScreen(
-                              onSignupSuccess: widget.onLoginSuccess,
-                            ),
+                            builder: (_) => const SignupScreen(),
                           ),
                         );
                       },

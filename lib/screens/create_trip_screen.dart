@@ -207,192 +207,285 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final duration = _startDate != null && _endDate != null
-        ? _endDate!.difference(_startDate!).inDays + 1
-        : null;
+Widget build(BuildContext context) {
+  final duration = _startDate != null && _endDate != null
+      ? _endDate!.difference(_startDate!).inDays + 1
+      : null;
 
-    return SafeArea(
+  return SafeArea(
+    child: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFFF8FAFC),
+            Color(0xFFEDE9FE),
+            Color(0xFFFDF2F8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Create Trip',
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF6D5DFF),
+                    Color(0xFFEC4899),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x336D5DFF),
+                    blurRadius: 24,
+                    offset: Offset(0,10),
+                  )
+                ],
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  Icon(
+                    Icons.explore_rounded,
+                    color: Colors.white,
+                    size: 42,
+                  ),
+
+                  SizedBox(height: 18),
+
+                  Text(
+                    'Design your next escape ✈️',
+                    style: TextStyle(
+                      fontSize: 34,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+
+                  SizedBox(height: 8),
+
+                  Text(
+                    'Choose where you want to go and let AI organize the details.',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                ],
               ),
             ),
 
-            const SizedBox(height: 8),
-
-            const Text(
-              'Tell us where and when you want to travel.',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
-            ),
-
-            const SizedBox(height: 28),
+            const SizedBox(height:30),
 
             _locationSearchCard(),
 
-            const SizedBox(height: 16),
+            const SizedBox(height:18),
 
             Row(
               children: [
                 Expanded(
                   child: _dateCard(
-                    title: 'Start date',
+                    title: 'Departure',
                     value: _formatDate(_startDate),
-                    icon: Icons.play_arrow_rounded,
+                    icon: Icons.flight_takeoff,
                     onTap: _pickStartDate,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width:14),
                 Expanded(
                   child: _dateCard(
-                    title: 'End date',
+                    title: 'Return',
                     value: _formatDate(_endDate),
-                    icon: Icons.stop_rounded,
+                    icon: Icons.flight_land,
                     onTap: _pickEndDate,
                   ),
                 ),
               ],
             ),
 
-            if (duration != null) ...[
-              const SizedBox(height: 16),
+            if(duration!=null)...[
+              const SizedBox(height:18),
+
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(22),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.05),
+                      blurRadius: 14,
+                    )
+                  ]
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_month,
-                      color: Color(0xFF2563EB),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Trip duration: $duration days',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E3A8A),
+
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE0E7FF),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.calendar_month,
+                        color: Color(0xFF4338CA),
                       ),
                     ),
+
+                    const SizedBox(width:14),
+
+                    Text(
+                      '$duration day trip',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    )
                   ],
                 ),
-              ),
+              )
             ],
 
-            const SizedBox(height: 16),
+            const SizedBox(height:18),
 
             _inputCard(
               child: TextField(
-                controller: _budgetController,
+                controller:_budgetController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   icon: Icon(
-                    Icons.attach_money,
+                    Icons.attach_money_rounded,
                     color: Color(0xFF6D5DFF),
                   ),
-                  labelText: 'Budget',
+                  labelText: 'Trip budget',
                   hintText: 'Example: 1200',
                 ),
               ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height:30),
 
             const Text(
-              'Travel interests',
+              'What do you enjoy?',
               style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
+                fontSize:22,
+                fontWeight: FontWeight.w900,
               ),
             ),
 
-            const SizedBox(height: 8),
-
-            const Text(
-              'Choose one or more interests for your trip.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-
-            const SizedBox(height: 14),
+            const SizedBox(height:10),
 
             Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: _interests.map((interest) {
-                final selected = _selectedInterests.contains(interest);
+              spacing:12,
+              runSpacing:12,
+              children:_interests.map((interest){
+
+                final selected =
+                    _selectedInterests.contains(interest);
 
                 return ChoiceChip(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal:12,
+                    vertical:10,
+                  ),
                   label: Text(interest),
-                  selected: selected,
-                  onSelected: (_) {
+                  selected:selected,
+                  onSelected:(_){
+
                     setState(() {
-                      if (selected) {
-                        if (_selectedInterests.length > 1) {
+
+                      if(selected){
+
+                        if(_selectedInterests.length>1){
                           _selectedInterests.remove(interest);
                         }
-                      } else {
+
+                      }else{
                         _selectedInterests.add(interest);
                       }
                     });
+
                   },
-                  selectedColor: const Color(0xFFE0E7FF),
+
+                  selectedColor: const Color(0xFF6D5DFF),
                   backgroundColor: Colors.white,
+
                   labelStyle: TextStyle(
                     color: selected
-                        ? const Color(0xFF4338CA)
+                        ? Colors.white
                         : const Color(0xFF475569),
-                    fontWeight: FontWeight.w700,
+
+                    fontWeight: FontWeight.w800,
                   ),
                 );
+
               }).toList(),
             ),
 
-            const SizedBox(height: 36),
+            const SizedBox(height:35),
 
-            SizedBox(
+            Container(
               width: double.infinity,
-              height: 58,
-              child: ElevatedButton(
-                onPressed: _generateTrip,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6D5DFF),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+              height: 62,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF6D5DFF),
+                    Color(0xFFEC4899),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x336D5DFF),
+                    blurRadius:18,
+                    offset: Offset(0,10),
+                  )
+                ]
+              ),
+              child: ElevatedButton.icon(
+                onPressed:_generateTrip,
+
+                icon: const Icon(Icons.auto_awesome),
+
+                label: const Text(
+                  'Generate AI Trip',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize:16,
                   ),
                 ),
-                child: const Text(
-                  'Generate Trip Plan',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
+
+                style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shadowColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
                 ),
               ),
-            ),
+              
+            )
+           )
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _locationSearchCard() {
     return Column(
@@ -428,7 +521,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.white.withOpacity(.95),
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
@@ -479,60 +572,74 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   Widget _inputCard({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 8,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: child,
-    );
-  }
-
-  Widget _dateCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
+  return Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal:18,
+      vertical:8,
+    ),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(.92),
       borderRadius: BorderRadius.circular(24),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              icon,
-              color: const Color(0xFF6D5DFF),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-          ],
-        ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.04),
+          blurRadius:12,
+          offset: const Offset(0,6),
+        )
+      ],
+    ),
+    child: child,
+  );
+}
+  Widget _dateCard({
+  required String title,
+  required String value,
+  required IconData icon,
+  required VoidCallback onTap,
+}) {
+  return InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(24),
+    child: Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.92),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-    );
-  }
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF6D5DFF),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 }

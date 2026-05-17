@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../services/firestore_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/trip.dart';
@@ -22,6 +23,7 @@ class WeatherDay {
 }
 
 class PlaceSuggestion {
+  final String id;
   final String name;
   final String address;
   final double latitude;
@@ -31,6 +33,7 @@ class PlaceSuggestion {
   final String? imageUrl;
 
   PlaceSuggestion({
+    required this.id,
     required this.name,
     required this.address,
     required this.latitude,
@@ -65,6 +68,8 @@ class PlanScreen extends StatefulWidget {
 
 class _PlanScreenState extends State<PlanScreen> {
   bool _isLoading = false;
+  bool _isSavingTrip = false;
+  final Set<String> _favoritePlaceIds = {};
   List<WeatherDay> _weatherDays = [];
   List<PlaceSuggestion> _places = [];
   final Set<String> _usedPlacesGlobally = {};
@@ -94,9 +99,11 @@ class _PlanScreenState extends State<PlanScreen> {
     await _loadWeather();
     await _loadGooglePlaces();
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+  setState(() {
+    _isLoading = false;
+  });
+}
   }
 
   String _formatApiDate(DateTime date) {
@@ -264,6 +271,7 @@ class _PlanScreenState extends State<PlanScreen> {
 
             loadedPlaces.add(
               PlaceSuggestion(
+                id: id,
                 name: displayName?['text'] ?? 'Place to visit',
                 address: place['formattedAddress'] ?? '',
                 latitude: (location?['latitude'] as num?)?.toDouble() ?? 0,
@@ -280,8 +288,12 @@ class _PlanScreenState extends State<PlanScreen> {
       }
     }
 
+   if (mounted) {
+  setState(() {
     _places = loadedPlaces;
-  }
+  });
+ }
+}
 
   List<PlaceSuggestion> _placesByCategory(String category) {
     return _places.where((place) => place.category == category).toList();
@@ -456,6 +468,61 @@ class _PlanScreenState extends State<PlanScreen> {
       mode: LaunchMode.externalApplication,
     );
   }
+  Future<void> _saveTripToFirestore() async {
+  final trip = widget.trip;
+
+  if (trip == null) return;
+
+  setState(() {
+    _isSavingTrip = true;
+  });
+
+  await FirestoreService.saveTrip(trip);
+
+  if (!mounted) return;
+
+  setState(() {
+    _isSavingTrip = false;
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+  const SnackBar(
+    content: Text('Trip saved successfully ❤️'),
+    duration: Duration(seconds: 2),
+  ),
+ );
+}
+
+Future<void> _toggleFavorite(PlaceSuggestion place) async {
+  final trip = widget.trip;
+  if (trip == null) return;
+
+  final isFavorite = _favoritePlaceIds.contains(place.id);
+
+  setState(() {
+    if (isFavorite) {
+      _favoritePlaceIds.remove(place.id);
+    } else {
+      _favoritePlaceIds.add(place.id);
+    }
+  });
+
+  if (isFavorite) {
+    await FirestoreService.removeFavoritePlace(place.id);
+  } else {
+    await FirestoreService.saveFavoritePlace(
+      placeId: place.id,
+      name: place.name,
+      address: place.address,
+      city: trip.city,
+      category: place.category,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      imageUrl: place.imageUrl,
+      rating: place.rating,
+    );
+  }
+}
 
   String _budgetStyle(double dailyBudget) {
     if (dailyBudget < 80) {
@@ -569,150 +636,180 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 
   Widget _heroCard(Trip trip, double dailyBudget) {
-    final cityName = trip.city.split(',').first;
+  final cityName = trip.city.split(',').first;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(26),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(34),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF312E81),
-            Color(0xFF6D5DFF),
-            Color(0xFF8B5CF6),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6D5DFF).withOpacity(0.35),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(26),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(34),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF312E81),
+          Color(0xFF6D5DFF),
+          Color(0xFF8B5CF6),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(
-                  Icons.flight_takeoff_rounded,
-                  color: Colors.white,
-                  size: 31,
-                ),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF6D5DFF).withOpacity(0.35),
+          blurRadius: 28,
+          offset: const Offset(0, 14),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Trip to $cityName',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                        height: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'AI Smart Itinerary',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
+              child: const Icon(
+                Icons.flight_takeoff_rounded,
+                color: Colors.white,
+                size: 31,
               ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          Row(
-            children: [
-              Expanded(
-                child: _heroInfo(
-                  icon: Icons.calendar_month,
-                  title: 'Duration',
-                  value: '${trip.days} Days',
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _heroInfo(
-                  icon: Icons.favorite,
-                  title: 'Interests',
-                  value: trip.interests.join(' • '),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: _budgetColor(dailyBudget).withOpacity(0.22),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: Colors.white),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '${_budgetStyle(dailyBudget)} budget travel style',
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Trip to $cityName',
                     style: const TextStyle(
                       color: Colors.white,
+                      fontSize: 30,
                       fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'AI Smart Itinerary',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w800,
                       fontSize: 15,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+          ],
+        ),
+
+        const SizedBox(height: 28),
+
+        Row(
+          children: [
+            Expanded(
+              child: _heroInfo(
+                icon: Icons.calendar_month,
+                title: 'Duration',
+                value: '${trip.days} Days',
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _heroInfo(
+                icon: Icons.favorite,
+                title: 'Interests',
+                value: trip.interests.join(' • '),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: _budgetColor(dailyBudget).withOpacity(0.22),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
           ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.attach_money, color: Colors.white),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '\$${trip.budget.toStringAsFixed(0)} Budget • ${_estimatedDayCost(dailyBudget)} / day',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                    ),
+          child: Row(
+            children: [
+              const Icon(Icons.auto_awesome, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${_budgetStyle(dailyBudget)} budget travel style',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.attach_money, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '\$${trip.budget.toStringAsFixed(0)} Budget • ${_estimatedDayCost(dailyBudget)} / day',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: _isSavingTrip ? null : _saveTripToFirestore,
+            icon: const Icon(Icons.bookmark_add),
+            label: Text(
+              _isSavingTrip ? 'Saving...' : 'Save Trip',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF6D5DFF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _heroInfo({
     required IconData icon,
@@ -868,6 +965,8 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 
  Widget _placeMiniCard(PlaceSuggestion place, String timeLabel) {
+  final isFavorite = _favoritePlaceIds.contains(place.id);
+
   return Container(
     margin: const EdgeInsets.only(bottom: 16),
     height: 260,
@@ -913,6 +1012,30 @@ class _PlanScreenState extends State<PlanScreen> {
           ),
 
           Positioned(
+            top: 16,
+            right: 16,
+            child: InkWell(
+              onTap: () => _toggleFavorite(place),
+              borderRadius: BorderRadius.circular(30),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.38),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.30),
+                  ),
+                ),
+                child: Icon(
+                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: isFavorite ? const Color(0xFFFF4D6D) : Colors.white,
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
             left: 18,
             right: 18,
             bottom: 18,
@@ -940,9 +1063,7 @@ class _PlanScreenState extends State<PlanScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
                 Text(
                   place.name,
                   maxLines: 2,
@@ -953,9 +1074,7 @@ class _PlanScreenState extends State<PlanScreen> {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-
                 const SizedBox(height: 6),
-
                 Row(
                   children: [
                     Icon(
@@ -988,9 +1107,7 @@ class _PlanScreenState extends State<PlanScreen> {
                     ],
                   ],
                 ),
-
                 const SizedBox(height: 6),
-
                 Text(
                   place.address,
                   maxLines: 1,
@@ -1000,9 +1117,7 @@ class _PlanScreenState extends State<PlanScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 OutlinedButton.icon(
                   onPressed: () => _openInMaps(place),
                   icon: const Icon(Icons.map_outlined, size: 18),

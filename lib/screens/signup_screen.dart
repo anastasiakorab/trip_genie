@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../services/fake_auth_service.dart';
+import '../services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
-  final VoidCallback onSignupSuccess;
-
   const SignupScreen({
     super.key,
-    required this.onSignupSuccess,
   });
 
   @override
@@ -22,34 +19,28 @@ class _SignupScreenState extends State<SignupScreen> {
   String? errorText;
   bool _isLoading = false;
 
-  void _signup() {
+  Future<void> _signup() async {
     setState(() {
       errorText = null;
       _isLoading = true;
     });
 
-    final error = FakeAuthService.signUp(
+    final error = await AuthService.signUp(
       name: nameController.text,
       email: emailController.text,
       password: passwordController.text,
     );
 
-    if (error != null) {
-      setState(() {
-        errorText = error;
-        _isLoading = false;
-      });
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
+      errorText = error;
     });
 
-    widget.onSignupSuccess();
-
-    if (mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+    // ако signup е успешен затвори го screen-от
+    if (error == null) {
+      Navigator.pop(context);
     }
   }
 
@@ -87,7 +78,9 @@ class _SignupScreenState extends State<SignupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _logo(),
+
                   const SizedBox(height: 24),
+
                   const Text(
                     'Create account',
                     style: TextStyle(
@@ -95,7 +88,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
+
                   const SizedBox(height: 8),
+
                   const Text(
                     'Sign up and start building your smart travel plans.',
                     style: TextStyle(
@@ -103,36 +98,46 @@ class _SignupScreenState extends State<SignupScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+
                   const SizedBox(height: 30),
+
                   _input(
                     controller: nameController,
                     label: 'Full name',
                     icon: Icons.person_outline,
                   ),
+
                   const SizedBox(height: 18),
+
                   _input(
                     controller: emailController,
                     label: 'Email',
                     icon: Icons.email_outlined,
                   ),
+
                   const SizedBox(height: 18),
+
                   _input(
                     controller: passwordController,
                     label: 'Password',
                     icon: Icons.lock_outline,
                     obscure: true,
                   ),
+
                   if (errorText != null) ...[
                     const SizedBox(height: 16),
+
                     Text(
-                      errorText!,
+                      errorText ?? 'Unknown error',
                       style: const TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
+
                   const SizedBox(height: 28),
+
                   SizedBox(
                     width: double.infinity,
                     height: 58,
@@ -147,7 +152,9 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       ),
                       child: Text(
-                        _isLoading ? 'Creating account...' : 'Sign Up',
+                        _isLoading
+                            ? 'Creating account...'
+                            : 'Sign Up',
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 16,
@@ -155,7 +162,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 18),
+
                   Center(
                     child: TextButton(
                       onPressed: () {

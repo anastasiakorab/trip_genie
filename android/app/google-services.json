@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "981176022677",
+    "project_id": "tripgenie-project-finki",
+    "storage_bucket": "tripgenie-project-finki.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:981176022677:android:47f90eecb64518690b8d9c",
+        "android_client_info": {
+          "package_name": "com.example.trip_genie"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0yykfmDCuD8m4v_6GqBBvZKTesMeCVHU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
