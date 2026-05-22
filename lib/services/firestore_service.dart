@@ -40,30 +40,38 @@ class FirestoreService {
     return '${city}_${start}_$end';
   }
 
-  static Future<void> saveTrip(Trip trip) async {
-    final userId = uid;
-    if (userId == null) return;
+  static Future<void> saveTrip(
+  Trip trip, {
+  List<Map<String, dynamic>> plannedDays = const [],
+  List<Map<String, dynamic>> placesPreview = const [],
+}) async {
+  final userId = uid;
+  if (userId == null) return;
 
-    final tripId = _tripDocumentId(trip);
+  final tripId = _db.collection('users').doc(userId).collection('savedTrips').doc().id;
 
-    await _db
-        .collection('users')
-        .doc(userId)
-        .collection('savedTrips')
-        .doc(tripId)
-        .set({
-      'tripId': tripId,
-      'city': trip.city,
-      'startDate': Timestamp.fromDate(trip.startDate),
-      'endDate': Timestamp.fromDate(trip.endDate),
-      'budget': trip.budget,
-      'interests': trip.interests,
-      'latitude': trip.latitude,
-      'longitude': trip.longitude,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
+  await _db
+      .collection('users')
+      .doc(userId)
+      .collection('savedTrips')
+      .doc(tripId)
+      .set({
+    'tripId': tripId,
+    'city': trip.city,
+    'startDate': Timestamp.fromDate(trip.startDate),
+    'endDate': Timestamp.fromDate(trip.endDate),
+    'budget': trip.budget,
+    'interests': trip.interests,
+    'latitude': trip.latitude,
+    'longitude': trip.longitude,
+
+    'plannedDays': plannedDays,
+    'placesPreview': placesPreview,
+
+    'createdAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  });
+}
 
   static Stream<QuerySnapshot<Map<String, dynamic>>> savedTripsStream() {
     final userId = uid;
@@ -75,6 +83,18 @@ class FirestoreService {
         .orderBy('updatedAt', descending: true)
         .snapshots();
   }
+
+  static Future<void> deleteSavedTrip(String tripId) async {
+  final userId = uid;
+  if (userId == null) return;
+
+  await _db
+      .collection('users')
+      .doc(userId)
+      .collection('savedTrips')
+      .doc(tripId)
+      .delete();
+}
 
   static Future<void> saveFavoritePlace({
     required String placeId,

@@ -34,65 +34,73 @@ class FavoritesScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFFF8FAFC),
-              Color(0xFFEDE9FE),
-              Color(0xFFFDF2F8),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 110),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _header(),
-              const SizedBox(height: 24),
-              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirestoreService.favoritePlacesStream(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(40),
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
-                  }
+Widget build(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return _emptyState();
-                  }
-
-                  final groupedPlaces = _groupByCity(snapshot.data!.docs);
-
-                  return Column(
-                    children: groupedPlaces.entries.map((entry) {
-                      final city = entry.key;
-                      final places = entry.value;
-
-                      return _cityDropdown(
-                        context: context,
-                        city: city,
-                        places: places,
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-            ],
-          ),
+  return SafeArea(
+    child: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [
+                  const Color(0xFF0F172A),
+                  const Color(0xFF1E1B4B),
+                  const Color(0xFF312E81),
+                ]
+              : [
+                  const Color(0xFFF8FAFC),
+                  const Color(0xFFEDE9FE),
+                  const Color(0xFFFDF2F8),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
-    );
-  }
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _header(),
+            const SizedBox(height: 24),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirestoreService.favoritePlacesStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _emptyState(context);
+                }
+
+                final groupedPlaces = _groupByCity(snapshot.data!.docs);
+
+                return Column(
+                  children: groupedPlaces.entries.map((entry) {
+                    final city = entry.key;
+                    final places = entry.value;
+
+                    return _cityDropdown(
+                      context: context,
+                      city: city,
+                      places: places,
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
   Widget _header() {
     return Container(
@@ -154,84 +162,90 @@ class FavoritesScreen extends StatelessWidget {
   }
 
   Widget _cityDropdown({
-    required BuildContext context,
-    required String city,
-    required List<QueryDocumentSnapshot<Map<String, dynamic>>> places,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.90),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
-        ),
-        child: ExpansionTile(
-          initiallyExpanded: false,
-          tilePadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 8,
-          ),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-          leading: Container(
-            width: 42,
-            height: 42,
-            decoration: const BoxDecoration(
-              color: Color(0xFFEDE9FE),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.location_on_rounded,
-              color: Color(0xFF6D5DFF),
-            ),
-          ),
-          title: Text(
-            city,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF111827),
-            ),
-          ),
-          subtitle: Text(
-            '${places.length} saved places',
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF64748B),
-            ),
-          ),
-          iconColor: const Color(0xFF6D5DFF),
-          collapsedIconColor: const Color(0xFF6D5DFF),
-          children: places.map((doc) {
-            final data = doc.data();
+  required BuildContext context,
+  required String city,
+  required List<QueryDocumentSnapshot<Map<String, dynamic>>> places,
+}) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
-            return _favoriteCard(
-              context: context,
-              placeId: data['placeId'] ?? doc.id,
-              name: data['name'] ?? 'Favorite place',
-              address: data['address'] ?? '',
-              category: data['category'] ?? 'Place',
-              imageUrl: data['imageUrl'],
-              rating: (data['rating'] as num?)?.toDouble(),
-              latitude: (data['latitude'] as num?)?.toDouble() ?? 0,
-              longitude: (data['longitude'] as num?)?.toDouble() ?? 0,
-            );
-          }).toList(),
+  return Container(
+    margin: const EdgeInsets.only(bottom: 18),
+    decoration: BoxDecoration(
+      color: isDark
+          ? const Color(0xFF1E293B).withOpacity(.92)
+          : Colors.white.withOpacity(0.90),
+      borderRadius: BorderRadius.circular(28),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.06),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
+      ],
+    ),
+    child: Theme(
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
       ),
-    );
-  }
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        tilePadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 8,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(.12)
+                : const Color(0xFFEDE9FE),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.location_on_rounded,
+            color: Color(0xFF6D5DFF),
+          ),
+        ),
+        title: Text(
+          city,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+            color: isDark ? Colors.white : const Color(0xFF111827),
+          ),
+        ),
+        subtitle: Text(
+          '${places.length} saved places',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white70 : const Color(0xFF64748B),
+          ),
+        ),
+        iconColor: const Color(0xFF6D5DFF),
+        collapsedIconColor: const Color(0xFF6D5DFF),
+        children: places.map((doc) {
+          final data = doc.data();
+
+          return _favoriteCard(
+            context: context,
+            placeId: data['placeId'] ?? doc.id,
+            name: data['name'] ?? 'Favorite place',
+            address: data['address'] ?? '',
+            category: data['category'] ?? 'Place',
+            imageUrl: data['imageUrl'],
+            rating: (data['rating'] as num?)?.toDouble(),
+            latitude: (data['latitude'] as num?)?.toDouble() ?? 0,
+            longitude: (data['longitude'] as num?)?.toDouble() ?? 0,
+          );
+        }).toList(),
+      ),
+    ),
+  );
+}
 
   Widget _favoriteCard({
     required BuildContext context,
@@ -422,51 +436,40 @@ class FavoritesScreen extends StatelessWidget {
     );
   }
 
-  Widget _emptyState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(30),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+  Widget _emptyState(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(30),
+    decoration: BoxDecoration(
+      color: isDark
+          ? const Color(0xFF1E293B)
+          : Colors.white.withOpacity(0.92),
+      borderRadius: BorderRadius.circular(32),
+    ),
+    child: Column(
+      children: [
+        const Icon(
+          Icons.favorite_border,
+          size: 70,
+          color: Color(0xFF6D5DFF),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'No favorites yet',
+          style: TextStyle(
+            fontSize: 25,
+            fontWeight: FontWeight.w900,
+            color: isDark
+                ? Colors.white
+                : const Color(0xFF111827),
           ),
-        ],
-      ),
-      child: const Column(
-        children: [
-          Icon(
-            Icons.favorite_border,
-            size: 70,
-            color: Color(0xFF6D5DFF),
-          ),
-          SizedBox(height: 18),
-          Text(
-            'No favorites yet',
-            style: TextStyle(
-              fontSize: 25,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF111827),
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Open a trip plan and tap the heart icon on places you want to save.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _fallback(String category) {
     return Container(

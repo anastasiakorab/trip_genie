@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/trip.dart';
+import '../services/location_service.dart';
+import '../services/google_places_service.dart';
+import 'package:geocoding/geocoding.dart';
+import '../services/google_places_service.dart';
 
 class LocationSuggestion {
   final String title;
@@ -40,6 +44,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   double? _selectedLatitude;
   double? _selectedLongitude;
+
+  bool _gettingCurrentLocation = false;
 
   final Set<String> _selectedInterests = {'Museums'};
 
@@ -135,6 +141,90 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     });
   }
 
+  Future<void> _useCurrentLocation() async {
+  setState(() {
+    _gettingCurrentLocation = true;
+  });
+
+  final position = await LocationService.getCurrentLocation();
+
+  if (position == null) {
+    setState(() {
+      _gettingCurrentLocation = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Location permission denied or unavailable'),
+      ),
+    );
+    return;
+  }
+
+  String locationName = 'Current location';
+
+  try {
+    final url = Uri.parse(
+      'https://maps.googleapis.com/maps/api/geocode/json'
+      '?latlng=${position.latitude},${position.longitude}'
+      '&key=$googleApiKey',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final results = data['results'] as List<dynamic>? ?? [];
+
+      for (final result in results) {
+        final components =
+            result['address_components'] as List<dynamic>? ?? [];
+
+        for (final component in components) {
+          final types = component['types'] as List<dynamic>? ?? [];
+
+          if (types.contains('locality') ||
+    types.contains('administrative_area_level_1') ||
+    types.contains('postal_town')) {
+
+  locationName = component['long_name'].toString();
+  break;
+}
+        }
+
+        if (locationName != 'Current location') break;
+      }
+    }
+  } catch (e) {
+    locationName = 'Current location';
+  }
+if (locationName == 'Current location') {
+  if (position.latitude > 41.8 &&
+      position.latitude < 42.2 &&
+      position.longitude > 21.2 &&
+      position.longitude < 21.7) {
+    locationName = 'Skopje';
+  }
+}
+
+  setState(() {
+    _cityController.text = locationName.trim();
+    print("Detected city: $locationName");
+    _selectedLatitude = position.latitude;
+    _selectedLongitude = position.longitude;
+    _locationSuggestions = [];
+    _gettingCurrentLocation = false;
+  });
+
+  FocusScope.of(context).unfocus();
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('Using your current location: $locationName'),
+    ),
+  );
+}
+
   Future<void> _pickStartDate() async {
     final now = DateTime.now();
 
@@ -207,287 +297,288 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   @override
-Widget build(BuildContext context) {
-  final duration = _startDate != null && _endDate != null
-      ? _endDate!.difference(_startDate!).inDays + 1
-      : null;
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  return SafeArea(
-    child: Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color(0xFFF8FAFC),
-            Color(0xFFEDE9FE),
-            Color(0xFFFDF2F8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    final duration = _startDate != null && _endDate != null
+        ? _endDate!.difference(_startDate!).inDays + 1
+        : null;
+
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    const Color(0xFF0F172A),
+                    const Color(0xFF1E1B4B),
+                    const Color(0xFF312E81),
+                  ]
+                : [
+                    const Color(0xFFF8FAFC),
+                    const Color(0xFFEDE9FE),
+                    const Color(0xFFFDF2F8),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
         ),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF6D5DFF),
-                    Color(0xFFEC4899),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF6D5DFF),
+                      Color(0xFFEC4899),
+                    ],
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x336D5DFF),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
+                    )
                   ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x336D5DFF),
-                    blurRadius: 24,
-                    offset: Offset(0,10),
-                  )
-                ],
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  Icon(
-                    Icons.explore_rounded,
-                    color: Colors.white,
-                    size: 42,
-                  ),
-
-                  SizedBox(height: 18),
-
-                  Text(
-                    'Design your next escape ✈️',
-                    style: TextStyle(
-                      fontSize: 34,
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.explore_rounded,
                       color: Colors.white,
-                      fontWeight: FontWeight.w900,
+                      size: 42,
+                    ),
+                    SizedBox(height: 18),
+                    Text(
+                      'Design your next escape ✈️',
+                      style: TextStyle(
+                        fontSize: 34,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Choose where you want to go and let AI organize the details.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              _locationSearchCard(),
+
+              const SizedBox(height: 12),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _gettingCurrentLocation ? null : _useCurrentLocation,
+                  icon: const Icon(Icons.my_location),
+                  label: Text(
+                    _gettingCurrentLocation
+                        ? 'Detecting location...'
+                        : 'Use my current location',
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _dateCard(
+                      title: 'Departure',
+                      value: _formatDate(_startDate),
+                      icon: Icons.flight_takeoff,
+                      onTap: _pickStartDate,
                     ),
                   ),
-
-                  SizedBox(height: 8),
-
-                  Text(
-                    'Choose where you want to go and let AI organize the details.',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _dateCard(
+                      title: 'Return',
+                      value: _formatDate(_endDate),
+                      icon: Icons.flight_land,
+                      onTap: _pickEndDate,
                     ),
-                  )
+                  ),
                 ],
               ),
-            ),
 
-            const SizedBox(height:30),
-
-            _locationSearchCard(),
-
-            const SizedBox(height:18),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _dateCard(
-                    title: 'Departure',
-                    value: _formatDate(_startDate),
-                    icon: Icons.flight_takeoff,
-                    onTap: _pickStartDate,
+              if (duration != null) ...[
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.05),
+                        blurRadius: 14,
+                      )
+                    ],
                   ),
-                ),
-                const SizedBox(width:14),
-                Expanded(
-                  child: _dateCard(
-                    title: 'Return',
-                    value: _formatDate(_endDate),
-                    icon: Icons.flight_land,
-                    onTap: _pickEndDate,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E7FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.calendar_month,
+                          color: Color(0xFF4338CA),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        '$duration day trip',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF111827),
+                        ),
+                      )
+                    ],
                   ),
-                ),
+                )
               ],
-            ),
 
-            if(duration!=null)...[
-              const SizedBox(height:18),
+              const SizedBox(height: 18),
+
+              _inputCard(
+                child: TextField(
+                  controller: _budgetController,
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    icon: const Icon(
+                      Icons.attach_money_rounded,
+                      color: Color(0xFF6D5DFF),
+                    ),
+                    labelText: 'Trip budget',
+                    hintText: 'Example: 1200',
+                    labelStyle: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              Text(
+                'What do you enjoy?',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF111827),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: _interests.map((interest) {
+                  final selected = _selectedInterests.contains(interest);
+
+                  return ChoiceChip(
+                    label: Text(
+                      interest,
+                      style: TextStyle(
+                        color: selected
+                            ? Colors.white
+                            : (isDark
+                                ? Colors.white
+                                : const Color(0xFF111827)),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    selected: selected,
+                    onSelected: (_) {
+                      setState(() {
+                        if (selected) {
+                          if (_selectedInterests.length > 1) {
+                            _selectedInterests.remove(interest);
+                          }
+                        } else {
+                          _selectedInterests.add(interest);
+                        }
+                      });
+                    },
+                    selectedColor: const Color(0xFF6D5DFF),
+                    backgroundColor:
+                        isDark ? const Color(0xFF1E293B) : Colors.white,
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 35),
 
               Container(
-                padding: const EdgeInsets.all(18),
+                width: double.infinity,
+                height: 62,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.05),
-                      blurRadius: 14,
-                    )
-                  ]
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF6D5DFF),
+                      Color(0xFFEC4899),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  children: [
-
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFE0E7FF),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.calendar_month,
-                        color: Color(0xFF4338CA),
-                      ),
+                child: ElevatedButton.icon(
+                  onPressed: _generateTrip,
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text(
+                    'Generate AI Trip',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
                     ),
-
-                    const SizedBox(width:14),
-
-                    Text(
-                      '$duration day trip',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    )
-                  ],
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                  ),
                 ),
-              )
+              ),
             ],
-
-            const SizedBox(height:18),
-
-            _inputCard(
-              child: TextField(
-                controller:_budgetController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  icon: Icon(
-                    Icons.attach_money_rounded,
-                    color: Color(0xFF6D5DFF),
-                  ),
-                  labelText: 'Trip budget',
-                  hintText: 'Example: 1200',
-                ),
-              ),
-            ),
-
-            const SizedBox(height:30),
-
-            const Text(
-              'What do you enjoy?',
-              style: TextStyle(
-                fontSize:22,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-
-            const SizedBox(height:10),
-
-            Wrap(
-              spacing:12,
-              runSpacing:12,
-              children:_interests.map((interest){
-
-                final selected =
-                    _selectedInterests.contains(interest);
-
-                return ChoiceChip(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal:12,
-                    vertical:10,
-                  ),
-                  label: Text(interest),
-                  selected:selected,
-                  onSelected:(_){
-
-                    setState(() {
-
-                      if(selected){
-
-                        if(_selectedInterests.length>1){
-                          _selectedInterests.remove(interest);
-                        }
-
-                      }else{
-                        _selectedInterests.add(interest);
-                      }
-                    });
-
-                  },
-
-                  selectedColor: const Color(0xFF6D5DFF),
-                  backgroundColor: Colors.white,
-
-                  labelStyle: TextStyle(
-                    color: selected
-                        ? Colors.white
-                        : const Color(0xFF475569),
-
-                    fontWeight: FontWeight.w800,
-                  ),
-                );
-
-              }).toList(),
-            ),
-
-            const SizedBox(height:35),
-
-            Container(
-              width: double.infinity,
-              height: 62,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF6D5DFF),
-                    Color(0xFFEC4899),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x336D5DFF),
-                    blurRadius:18,
-                    offset: Offset(0,10),
-                  )
-                ]
-              ),
-              child: ElevatedButton.icon(
-                onPressed:_generateTrip,
-
-                icon: const Icon(Icons.auto_awesome),
-
-                label: const Text(
-                  'Generate AI Trip',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize:16,
-                  ),
-                ),
-
-                style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-                ),
-              ),
-              
-            )
-           )
-          ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _locationSearchCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       children: [
         _inputCard(
@@ -495,6 +586,9 @@ Widget build(BuildContext context) {
             controller: _cityController,
             focusNode: _cityFocusNode,
             onChanged: _onCityChanged,
+            style: TextStyle(
+              color: isDark ? Colors.white : const Color(0xFF111827),
+            ),
             decoration: InputDecoration(
               border: InputBorder.none,
               icon: const Icon(
@@ -503,6 +597,12 @@ Widget build(BuildContext context) {
               ),
               labelText: 'Destination city',
               hintText: 'Where are you going?',
+              labelStyle: TextStyle(
+                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+              ),
+              hintStyle: TextStyle(
+                color: isDark ? Colors.white54 : const Color(0xFF94A3B8),
+              ),
               suffixIcon: _isSearchingLocation
                   ? const SizedBox(
                       width: 18,
@@ -521,7 +621,9 @@ Widget build(BuildContext context) {
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.95),
+              color: isDark
+                  ? const Color(0xFF1E293B).withOpacity(.96)
+                  : Colors.white.withOpacity(.95),
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
@@ -536,7 +638,10 @@ Widget build(BuildContext context) {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _locationSuggestions.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: isDark ? Colors.white12 : Colors.black12,
+              ),
               itemBuilder: (context, index) {
                 final location = _locationSuggestions[index];
 
@@ -547,11 +652,17 @@ Widget build(BuildContext context) {
                   ),
                   title: Text(
                     location.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF111827),
                     ),
                   ),
-                  subtitle: const Text('Destination'),
+                  subtitle: Text(
+                    'Destination',
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                    ),
+                  ),
                   onTap: () {
                     setState(() {
                       _cityController.text = location.title;
@@ -572,74 +683,86 @@ Widget build(BuildContext context) {
   }
 
   Widget _inputCard({required Widget child}) {
-  return Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal:18,
-      vertical:8,
-    ),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(.92),
-      borderRadius: BorderRadius.circular(24),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(.04),
-          blurRadius:12,
-          offset: const Offset(0,6),
-        )
-      ],
-    ),
-    child: child,
-  );
-}
-  Widget _dateCard({
-  required String title,
-  required String value,
-  required IconData icon,
-  required VoidCallback onTap,
-}) {
-  return InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(24),
-    child: Container(
-      padding: const EdgeInsets.all(18),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 8,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.92),
+        color: isDark
+            ? const Color(0xFF1E293B).withOpacity(.92)
+            : Colors.white.withOpacity(.92),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(.08) : Colors.transparent,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.04),
             blurRadius: 12,
             offset: const Offset(0, 6),
-          ),
+          )
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            color: const Color(0xFF6D5DFF),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF64748B),
+      child: child,
+    );
+  }
+
+  Widget _dateCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF1E293B).withOpacity(.92)
+              : Colors.white.withOpacity(.92),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.04),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-              color: Color(0xFF0F172A),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: const Color(0xFF6D5DFF),
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

@@ -53,10 +53,30 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F4FF),
-      body: SafeArea(
+Widget build(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  return Scaffold(
+    backgroundColor: Colors.transparent,
+    body: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [
+                  const Color(0xFF0F172A),
+                  const Color(0xFF1E1B4B),
+                  const Color(0xFF312E81),
+                ]
+              : [
+                  const Color(0xFFF8FAFC),
+                  const Color(0xFFEDE9FE),
+                  const Color(0xFFFDF2F8),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -64,7 +84,9 @@ class _SignupScreenState extends State<SignupScreen> {
               constraints: const BoxConstraints(maxWidth: 460),
               padding: const EdgeInsets.all(30),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(34),
                 boxShadow: [
                   BoxShadow(
@@ -81,20 +103,25 @@ class _SignupScreenState extends State<SignupScreen> {
 
                   const SizedBox(height: 24),
 
-                  const Text(
+                  Text(
                     'Create account',
                     style: TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.w900,
+                      color: isDark
+                          ? Colors.white
+                          : const Color(0xFF111827),
                     ),
                   ),
 
                   const SizedBox(height: 8),
 
-                  const Text(
+                  Text(
                     'Sign up and start building your smart travel plans.',
                     style: TextStyle(
-                      color: Color(0xFF64748B),
+                      color: isDark
+                          ? Colors.white70
+                          : const Color(0xFF64748B),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -126,9 +153,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
                   if (errorText != null) ...[
                     const SizedBox(height: 16),
-
                     Text(
-                      errorText ?? 'Unknown error',
+                      errorText!,
                       style: const TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.w700,
@@ -185,8 +211,9 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _logo() {
     return Container(
@@ -209,29 +236,70 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _input({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscure = false,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon),
-        hintText: label,
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 22,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
+ Widget _input({
+  required TextEditingController controller,
+  required String label,
+  required IconData icon,
+  bool obscure = false,
+}) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  return TextField(
+    controller: controller,
+    obscureText: obscure,
+    cursorColor: const Color(0xFF6D5DFF),
+
+    style: TextStyle(
+      color: isDark ? Colors.white : Colors.black,
+    ),
+
+    decoration: InputDecoration(
+      prefixIcon: Icon(
+        icon,
+        color: const Color(0xFF6D5DFF),
+      ),
+
+      hintText: label,
+
+      hintStyle: TextStyle(
+        color: isDark
+            ? Colors.white54
+            : Colors.grey,
+      ),
+
+      filled: true,
+
+      fillColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
+
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 22,
+      ),
+
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(
+          color: isDark
+              ? Colors.white.withOpacity(.08)
+              : Colors.transparent,
         ),
       ),
-    );
-  }
+
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(
+          color: Color(0xFF6D5DFF),
+          width: 1.5,
+        ),
+      ),
+
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+    ),
+  );
+}
 }
