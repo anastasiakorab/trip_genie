@@ -4,29 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:convert';
 import 'edit_profile_screen.dart';
 import 'web_camera_screen.dart';
-
-import '../main.dart';
 import 'favorites_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state_provider.dart';
+import '../providers/profile_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   final Future<void> Function() onLogout;
 
-  const SettingsScreen({
-    super.key,
-    required this.onLogout,
-  });
+  const SettingsScreen({super.key, required this.onLogout});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool notificationsEnabled = true;
-  bool darkModeEnabled = themeNotifier.value == ThemeMode.dark;
+  bool darkModeEnabled = false;
 
   Uint8List? profileImageBytes;
   bool isUploadingImage = false;
@@ -38,22 +34,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadProfileImage() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  final doc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(user.uid)
-      .get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
-  final imageBase64 = doc.data()?['profileImageBase64'];
+    final imageBase64 = doc.data()?['profileImageBase64'];
 
-  if (imageBase64 != null && imageBase64.toString().isNotEmpty) {
-    setState(() {
-      profileImageBytes = base64Decode(imageBase64);
-    });
+    if (imageBase64 != null && imageBase64.toString().isNotEmpty) {
+      if (!context.mounted) return;
+
+      Provider.of<ProfileProvider>(
+        context,
+        listen: false,
+      ).setProfileImage(base64Decode(imageBase64));
+    }
   }
-}
 
   Future<void> _pickImage() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -94,9 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (source == 'camera') {
       bytes = await Navigator.push<Uint8List>(
         context,
-        MaterialPageRoute(
-          builder: (_) => const WebCameraScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const WebCameraScreen()),
       );
     } else {
       final picked = await ImagePicker().pickImage(
@@ -114,79 +111,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final base64Image = base64Encode(bytes);
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .set({
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
       'profileImageBase64': base64Image,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    setState(() {
-      profileImageBytes = bytes;
-    });
+    Provider.of<ProfileProvider>(context, listen: false).setProfileImage(bytes);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile photo updated'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
   }
 
   @override
-Widget build(BuildContext context) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  darkModeEnabled = isDark;
+  Widget build(BuildContext context) {
+    final appState = Provider.of<AppStateProvider>(context);
+    final profileProvider = Provider.of<ProfileProvider>(context);
 
-  final user = FirebaseAuth.instance.currentUser;
+    final isDark = appState.themeMode == ThemeMode.dark;
 
-  final name = user?.displayName?.isNotEmpty == true
-      ? user!.displayName!
-      : 'TripGenie User';
+    darkModeEnabled = isDark;
 
-  final email = user?.email ?? '';
+    final user = FirebaseAuth.instance.currentUser;
 
-  return SafeArea(
-    child: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A),
-                  const Color(0xFF1E1B4B),
-                  const Color(0xFF312E81),
-                ]
-              : [
-                  const Color(0xFFF8FAFC),
-                  const Color(0xFFEDE9FE),
-                  const Color(0xFFFDF2F8),
-                ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    final name = user?.displayName?.isNotEmpty == true
+        ? user!.displayName!
+        : 'TripGenie User';
+
+    final email = user?.email ?? '';
+
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    const Color(0xFF0F172A),
+                    const Color(0xFF1E1B4B),
+                    const Color(0xFF312E81),
+                  ]
+                : [
+                    const Color(0xFFF8FAFC),
+                    const Color(0xFFEDE9FE),
+                    const Color(0xFFFDF2F8),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            children: [
+              _settingsHeader(),
+              const SizedBox(height: 24),
+
+              _profileCard(
+                name: name,
+                email: email,
+                profileProvider: profileProvider,
+              ),
+
+              const SizedBox(height: 22),
+              _settingsCard(),
+              const SizedBox(height: 22),
+              _logoutButton(),
+            ],
+          ),
         ),
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-        child: Column(
-          children: [
-            _settingsHeader(),
-            const SizedBox(height: 24),
-
-            _profileCard(
-              name: name,
-              email: email,
-            ),
-
-            const SizedBox(height: 22),
-            _settingsCard(),
-            const SizedBox(height: 22),
-            _logoutButton(),
-          ],
-        ),
-      ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _settingsHeader() {
     return Container(
@@ -205,10 +200,7 @@ Widget build(BuildContext context) {
             height: 58,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF6D5DFF),
-                  Color(0xFFEC4899),
-                ],
+                colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -258,133 +250,122 @@ Widget build(BuildContext context) {
   }
 
   Widget _profileCard({
-  required String name,
-  required String email,
-}) {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(26),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(32),
-      gradient: const LinearGradient(
-        colors: [
-          Color(0xFF6D5DFF),
-          Color(0xFFEC4899),
+    required String name,
+    required String email,
+    required ProfileProvider profileProvider,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
+        ),
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: profileProvider.isUploadingImage ? null : _pickImage,
+            child: Stack(
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.22),
+                  ),
+                  child: ClipOval(
+                    child: profileProvider.isUploadingImage
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                            ),
+                          )
+                        : profileProvider.profileImageBytes != null
+                        ? Image.memory(
+                            profileProvider.profileImageBytes!,
+                            fit: BoxFit.cover,
+                            width: 96,
+                            height: 96,
+                          )
+                        : const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 48,
+                          ),
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6D5DFF),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            email,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                ).then((_) {});
+              },
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text(
+                'Edit Profile',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: Colors.white.withOpacity(0.55)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
-    ),
-    child: Column(
-      children: [
-        GestureDetector(
-          onTap: isUploadingImage ? null : _pickImage,
-          child: Stack(
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.22),
-                ),
-                child: ClipOval(
-                  child: isUploadingImage
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                          ),
-                        )
-                      : profileImageBytes != null
-                          ? Image.memory(
-                              profileImageBytes!,
-                              fit: BoxFit.cover,
-                              width: 96,
-                              height: 96,
-                            )
-                          : const Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 48,
-                            ),
-                ),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6D5DFF),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 3,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.add,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          name,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 26,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          email,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 18),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: () {
-            Navigator.push(
-              context,
-            MaterialPageRoute(
-              builder: (_) => const EditProfileScreen(),
-          ),
-       ).then((_) {
-          setState(() {});
-      });
-},
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text(
-              'Edit Profile',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: BorderSide(
-                color: Colors.white.withOpacity(0.55),
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
   Widget _settingsCard() {
+    final appState = Provider.of<AppStateProvider>(context, listen: false);
+    final profileProvider =
+    Provider.of<ProfileProvider>(context);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -400,11 +381,9 @@ Widget build(BuildContext context) {
             icon: Icons.notifications_none,
             title: 'Notifications',
             subtitle: 'Trip reminders and travel updates',
-            value: notificationsEnabled,
+            value: profileProvider.notificationsEnabled,
             onChanged: (value) {
-              setState(() {
-                notificationsEnabled = value;
-              });
+              profileProvider.toggleNotifications(value);
             },
           ),
           _divider(),
@@ -413,12 +392,8 @@ Widget build(BuildContext context) {
             title: 'Dark Mode',
             subtitle: 'Switch to a darker TripGenie look',
             value: darkModeEnabled,
-            onChanged: (value) async {
-              themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
-
-              setState(() {
-                darkModeEnabled = value;
-              });
+            onChanged: (value) {
+              appState.toggleDarkMode(value);
             },
           ),
           _divider(),
@@ -430,9 +405,7 @@ Widget build(BuildContext context) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const Scaffold(
-                    body: FavoritesScreen(),
-                  ),
+                  builder: (_) => const Scaffold(body: FavoritesScreen()),
                 ),
               );
             },
@@ -445,9 +418,7 @@ Widget build(BuildContext context) {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const _SavedTripsScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const _SavedTripsScreen()),
               );
             },
           ),
@@ -555,10 +526,7 @@ Widget build(BuildContext context) {
         icon: const Icon(Icons.logout),
         label: const Text(
           'Log Out',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFEF4444),
@@ -600,8 +568,9 @@ class _SavedTripsScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Container(
           decoration: BoxDecoration(
@@ -676,9 +645,8 @@ class _SavedTripsScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => _SavedTripDetailsScreen(
-                                tripData: data,
-                              ),
+                              builder: (_) =>
+                                  _SavedTripDetailsScreen(tripData: data),
                             ),
                           );
                         },
@@ -787,11 +755,13 @@ class _SavedTripsScreen extends StatelessWidget {
                                       final place = previewPlaces[index];
 
                                       return Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 10),
+                                        padding: const EdgeInsets.only(
+                                          right: 10,
+                                        ),
                                         child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           child: Stack(
                                             children: [
                                               SizedBox(
@@ -803,20 +773,23 @@ class _SavedTripsScreen extends StatelessWidget {
                                                         fit: BoxFit.cover,
                                                         errorBuilder:
                                                             (_, __, ___) {
-                                                          return Container(
-                                                            color: const Color(
-                                                                0xFF6D5DFF),
-                                                            child: const Icon(
-                                                              Icons.place,
-                                                              color:
-                                                                  Colors.white,
-                                                            ),
-                                                          );
-                                                        },
+                                                              return Container(
+                                                                color:
+                                                                    const Color(
+                                                                      0xFF6D5DFF,
+                                                                    ),
+                                                                child: const Icon(
+                                                                  Icons.place,
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
+                                                              );
+                                                            },
                                                       )
                                                     : Container(
                                                         color: const Color(
-                                                            0xFF6D5DFF),
+                                                          0xFF6D5DFF,
+                                                        ),
                                                         child: const Icon(
                                                           Icons.place,
                                                           color: Colors.white,
@@ -828,8 +801,9 @@ class _SavedTripsScreen extends StatelessWidget {
                                                 left: 0,
                                                 right: 0,
                                                 child: Container(
-                                                  padding:
-                                                      const EdgeInsets.all(6),
+                                                  padding: const EdgeInsets.all(
+                                                    6,
+                                                  ),
                                                   color: Colors.black54,
                                                   child: Text(
                                                     place['placeName'] ?? '',
@@ -908,10 +882,7 @@ class _SavedTripsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF6D5DFF),
-            Color(0xFFEC4899),
-          ],
+          colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
         ),
       ),
       child: Row(
@@ -940,9 +911,7 @@ class _SavedTripsScreen extends StatelessWidget {
 class _SavedTripDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> tripData;
 
-  const _SavedTripDetailsScreen({
-    required this.tripData,
-  });
+  const _SavedTripDetailsScreen({required this.tripData});
 
   @override
   Widget build(BuildContext context) {

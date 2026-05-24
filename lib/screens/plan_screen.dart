@@ -6,9 +6,12 @@ import 'package:http/http.dart' as http;
 import '../services/firestore_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geocoding/geocoding.dart';
-
+import 'package:provider/provider.dart';
+import '../providers/favorites_provider.dart';
+import '../providers/plan_provider.dart';
 import '../models/trip.dart';
 import '../services/google_places_service.dart';
+import '../services/open_meteo_service.dart';
 
 class WeatherDay {
   final double maxTemp;
@@ -50,30 +53,19 @@ class DayActivity {
   final String timeLabel;
   final PlaceSuggestion place;
 
-  DayActivity({
-    required this.timeLabel,
-    required this.place,
-  });
+  DayActivity({required this.timeLabel, required this.place});
 }
 
 class PlanScreen extends StatefulWidget {
   final Trip? trip;
 
-  const PlanScreen({
-    super.key,
-    this.trip,
-  });
+  const PlanScreen({super.key, this.trip});
 
   @override
   State<PlanScreen> createState() => _PlanScreenState();
 }
 
 class _PlanScreenState extends State<PlanScreen> {
-  bool _isLoading = false;
-  bool _isSavingTrip = false;
-  final Set<String> _favoritePlaceIds = {};
-  List<WeatherDay> _weatherDays = [];
-  List<PlaceSuggestion> _places = [];
   final Set<String> _usedPlacesGlobally = {};
   String? _resolvedTripCityName;
 
@@ -93,21 +85,21 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 
   Future<void> _loadPlanData() async {
-    setState(() {
-      _isLoading = true;
-      _weatherDays = [];
-      _places = [];
-    });
+    final planProvider = Provider.of<PlanProvider>(context, listen: false);
+
+    planProvider.setLoading(true);
+    planProvider.setWeather([]);
+    planProvider.setPlaces([]);
+
     _usedPlacesGlobally.clear();
+
     await _resolveTripCityName();
     await _loadWeather();
     await _loadGooglePlaces();
 
-    if (mounted) {
-  setState(() {
-    _isLoading = false;
-  });
-}
+    if (!mounted) return;
+
+    planProvider.setLoading(false);
   }
 
   Future<void> _resolveTripCityName() async {
@@ -124,7 +116,6 @@ class _PlanScreenState extends State<PlanScreen> {
       return;
     }
 
-    // First try Google reverse geocoding.
     try {
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/geocode/json'
@@ -163,19 +154,18 @@ class _PlanScreenState extends State<PlanScreen> {
             }
           }
 
-          _resolvedTripCityName = city ?? adminArea;
+          final resolvedName = city ?? adminArea;
 
-          if (_resolvedTripCityName != null &&
-              _resolvedTripCityName!.isNotEmpty) {
+          if (resolvedName != null && resolvedName.isNotEmpty) {
+            _resolvedTripCityName = resolvedName;
             return;
           }
         }
       }
     } catch (e) {
-      // Fallback below.
+      // If Google reverse geocoding fails, fallback below is used.
     }
 
-    // Fallback to geocoding plugin.
     try {
       final placemarks = await placemarkFromCoordinates(
         trip.latitude!,
@@ -187,11 +177,14 @@ class _PlanScreenState extends State<PlanScreen> {
 
         final city = place.locality;
         final subAdmin = place.subAdministrativeArea;
+        final adminArea = place.administrativeArea;
 
         if (city != null && city.isNotEmpty) {
           _resolvedTripCityName = city;
         } else if (subAdmin != null && subAdmin.isNotEmpty) {
           _resolvedTripCityName = subAdmin;
+        } else if (adminArea != null && adminArea.isNotEmpty) {
+          _resolvedTripCityName = adminArea;
         }
       }
     } catch (e) {
@@ -201,37 +194,32 @@ class _PlanScreenState extends State<PlanScreen> {
     _resolvedTripCityName ??= 'Current location';
   }
 
-  String _displayCityName(Trip trip) {
-  final rawCity = trip.city.trim();
+  String _displayCityName(Trip trip, List<PlaceSuggestion> places) {
+    final rawCity = trip.city.trim();
 
-  if (rawCity.toLowerCase().contains('current location')) {
-    final addressParts = _places
-        .map((place) => place.address)
-        .where((address) => address.isNotEmpty)
-        .join(', ');
+    if (rawCity.toLowerCase().contains('current location')) {
+      final addressParts = places
+          .map((place) => place.address)
+          .where((address) => address.isNotEmpty)
+          .join(', ');
 
-    if (addressParts.toLowerCase().contains('skopje')) {
-      return 'Skopje';
+      if (addressParts.toLowerCase().contains('skopje')) {
+        return 'Skopje';
+      }
+
+      if (_resolvedTripCityName != null &&
+          _resolvedTripCityName!.isNotEmpty &&
+          !_resolvedTripCityName!.toLowerCase().contains('current')) {
+        return _resolvedTripCityName!;
+      }
+
+      return 'Detected city';
     }
 
-    if (_resolvedTripCityName != null &&
-        _resolvedTripCityName!.isNotEmpty &&
-        !_resolvedTripCityName!.toLowerCase().contains('current')) {
-      return _resolvedTripCityName!;
-    }
-
-    return 'Detected city';
+    return rawCity.split(',').first.trim();
   }
 
-  return rawCity.split(',').first.trim();
-}
-
-  double _distanceKm(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
+  double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
     const earthRadiusKm = 6371.0;
 
     final dLat = (lat2 - lat1) * pi / 180;
@@ -254,6 +242,8 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 
   Future<void> _loadWeather() async {
+    final planProvider = Provider.of<PlanProvider>(context, listen: false);
+
     final trip = widget.trip;
 
     if (trip == null || trip.latitude == null || trip.longitude == null) {
@@ -263,40 +253,41 @@ class _PlanScreenState extends State<PlanScreen> {
     final startDate = _formatApiDate(trip.startDate);
     final endDate = _formatApiDate(trip.endDate);
 
-    final url = Uri.parse(
-      'https://api.open-meteo.com/v1/forecast'
-      '?latitude=${trip.latitude}'
-      '&longitude=${trip.longitude}'
-      '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code'
-      '&start_date=$startDate'
-      '&end_date=$endDate'
-      '&timezone=auto',
-    );
-
     try {
-      final response = await http.get(url);
+      final data = await OpenMeteoService.getWeather(
+        latitude: trip.latitude!,
+        longitude: trip.longitude!,
+        startDate: startDate,
+        endDate: endDate,
+      );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final daily = data['daily'];
-
-        final dates = daily['time'] as List<dynamic>;
-        final maxTemps = daily['temperature_2m_max'] as List<dynamic>;
-        final minTemps = daily['temperature_2m_min'] as List<dynamic>;
-        final rain = daily['precipitation_probability_max'] as List<dynamic>;
-        final codes = daily['weather_code'] as List<dynamic>;
-
-        _weatherDays = List.generate(dates.length, (index) {
-          return WeatherDay(
-            maxTemp: (maxTemps[index] as num).toDouble(),
-            minTemp: (minTemps[index] as num).toDouble(),
-            rainProbability: (rain[index] as num?)?.toInt() ?? 0,
-            weatherCode: (codes[index] as num).toInt(),
-          );
-        });
+      if (data == null) {
+        planProvider.setWeather([]);
+        return;
       }
+
+      final daily = data['daily'];
+
+      final dates = daily['time'] as List<dynamic>;
+      final maxTemps = daily['temperature_2m_max'] as List<dynamic>;
+      final minTemps = daily['temperature_2m_min'] as List<dynamic>;
+      final rain = daily['precipitation_probability_max'] as List<dynamic>;
+      final codes = daily['weather_code'] as List<dynamic>;
+
+      final weather = List.generate(dates.length, (index) {
+        return WeatherDay(
+          maxTemp: (maxTemps[index] as num).toDouble(),
+          minTemp: (minTemps[index] as num).toDouble(),
+          rainProbability: (rain[index] as num?)?.toInt() ?? 0,
+          weatherCode: (codes[index] as num).toInt(),
+        );
+      });
+
+      if (!mounted) return;
+
+      planProvider.setWeather(weather);
     } catch (e) {
-      _weatherDays = [];
+      planProvider.setWeather([]);
     }
   }
 
@@ -352,21 +343,22 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 
   Future<void> _loadGooglePlaces() async {
+    final planProvider = Provider.of<PlanProvider>(context, listen: false);
     final trip = widget.trip;
 
     if (trip == null || trip.latitude == null || trip.longitude == null) {
       return;
     }
 
-    final cityName = _displayCityName(trip);
+    final cityName = _displayCityName(
+      trip,
+      planProvider.places.cast<PlaceSuggestion>(),
+    );
     final loadedPlaces = <PlaceSuggestion>[];
     final usedPlaceIds = <String>{};
     final usedPhotoNames = <String>{};
 
-    Future<void> addPlaceFromJson(
-      dynamic place,
-      String interest,
-    ) async {
+    Future<void> addPlaceFromJson(dynamic place, String interest) async {
       final id = place['id']?.toString();
 
       if (id == null || usedPlaceIds.contains(id)) {
@@ -449,8 +441,8 @@ class _PlanScreenState extends State<PlanScreen> {
                 'longitude': trip.longitude,
               },
               'radius': 25000.0,
-            }
-          }
+            },
+          },
         };
 
         try {
@@ -496,8 +488,8 @@ class _PlanScreenState extends State<PlanScreen> {
                 'longitude': trip.longitude,
               },
               'radius': 25000.0,
-            }
-          }
+            },
+          },
         };
 
         try {
@@ -526,43 +518,47 @@ class _PlanScreenState extends State<PlanScreen> {
       }
     }
 
-    if (mounted) {
-      setState(() {
-        _places = loadedPlaces;
-      });
-    }
+    if (!mounted) return;
+    planProvider.setPlaces(loadedPlaces);
   }
 
-  List<PlaceSuggestion> _placesByCategory(String category) {
-    return _places.where((place) => place.category == category).toList();
+  List<PlaceSuggestion> _placesByCategory(
+    String category,
+    List<PlaceSuggestion> places,
+  ) {
+    return places.where((place) => place.category == category).toList();
   }
 
   PlaceSuggestion? _pickPlace(
-  String category,
-  int index,
-  Set<String> usedToday,
-) {
-  final places = _placesByCategory(category);
+    String category,
+    int index,
+    Set<String> usedToday,
+    List<PlaceSuggestion> places,
+  ) {
+    final categoryPlaces = _placesByCategory(category, places);
 
-  if (places.isEmpty) return null;
+    if (categoryPlaces.isEmpty) return null;
 
-  for (int i = 0; i < places.length; i++) {
-    final place = places[(index + i) % places.length];
+    for (int i = 0; i < categoryPlaces.length; i++) {
+      final place = categoryPlaces[(index + i) % categoryPlaces.length];
 
-   if (!usedToday.contains(place.name) &&
-    !_usedPlacesGlobally.contains(place.name)) {
+      if (!usedToday.contains(place.name) &&
+          !_usedPlacesGlobally.contains(place.name)) {
+        usedToday.add(place.name);
+        _usedPlacesGlobally.add(place.name);
 
-  usedToday.add(place.name);
-  _usedPlacesGlobally.add(place.name);
+        return place;
+      }
+    }
 
-  return place;
-}
+    return null;
   }
 
-  return null;
-}
-
-  List<DayActivity> _activitiesForDay(int dayIndex, Trip trip) {
+  List<DayActivity> _activitiesForDay(
+    int dayIndex,
+    Trip trip,
+    List<PlaceSuggestion> places,
+  ) {
     final activities = <DayActivity>[];
     final usedToday = <String>{};
 
@@ -580,92 +576,101 @@ class _PlanScreenState extends State<PlanScreen> {
 
     if (mainInterests.isNotEmpty) {
       final morningCategory = mainInterests[dayIndex % mainInterests.length];
-      final morningPlace = _pickPlace(morningCategory, dayIndex * 3, usedToday);
+      final morningPlace = _pickPlace(
+        morningCategory,
+        dayIndex * 3,
+        usedToday,
+        places,
+      );
 
       if (morningPlace != null) {
         activities.add(
-          DayActivity(
-            timeLabel: 'Morning visit',
-            place: morningPlace,
-          ),
+          DayActivity(timeLabel: 'Morning visit', place: morningPlace),
         );
       }
     }
 
     if (hasFood) {
-      final lunchPlace = _pickPlace('Food', dayIndex * 4, usedToday);
+      final lunchPlace = _pickPlace('Food', dayIndex * 4, usedToday, places);
 
       if (lunchPlace != null) {
-        activities.add(
-          DayActivity(
-            timeLabel: 'Lunch stop',
-            place: lunchPlace,
-          ),
-        );
+        activities.add(DayActivity(timeLabel: 'Lunch stop', place: lunchPlace));
       }
     }
 
     if (mainInterests.length > 1) {
       final afternoonCategory =
           mainInterests[(dayIndex + 1) % mainInterests.length];
-      final afternoonPlace = _pickPlace(afternoonCategory, dayIndex * 5, usedToday);
+      final afternoonPlace = _pickPlace(
+        afternoonCategory,
+        dayIndex * 5,
+        usedToday,
+        places,
+      );
 
       if (afternoonPlace != null) {
         activities.add(
-          DayActivity(
-            timeLabel: 'Afternoon activity',
-            place: afternoonPlace,
-          ),
+          DayActivity(timeLabel: 'Afternoon activity', place: afternoonPlace),
         );
       }
     } else if (mainInterests.length == 1) {
-      final afternoonPlace = _pickPlace(mainInterests.first, dayIndex * 5 + 1, usedToday);
+      final afternoonPlace = _pickPlace(
+        mainInterests.first,
+        dayIndex * 5 + 1,
+        usedToday,
+        places,
+      );
 
       if (afternoonPlace != null &&
           activities.every(
             (activity) => activity.place.name != afternoonPlace.name,
           )) {
         activities.add(
-          DayActivity(
-            timeLabel: 'Afternoon activity',
-            place: afternoonPlace,
-          ),
+          DayActivity(timeLabel: 'Afternoon activity', place: afternoonPlace),
         );
       }
     }
 
     if (hasNightlife) {
-      final eveningPlace = _pickPlace('Nightlife', dayIndex * 6, usedToday);
+      final eveningPlace = _pickPlace(
+        'Nightlife',
+        dayIndex * 6,
+        usedToday,
+        places,
+      );
 
       if (eveningPlace != null) {
         activities.add(
-          DayActivity(
-            timeLabel: 'Evening activity',
-            place: eveningPlace,
-          ),
+          DayActivity(timeLabel: 'Evening activity', place: eveningPlace),
         );
       }
     } else if (hasFood && activities.length < 3) {
-      final dinnerPlace = _pickPlace('Food', dayIndex * 7 + 2, usedToday);
+      final dinnerPlace = _pickPlace(
+        'Food',
+        dayIndex * 7 + 2,
+        usedToday,
+        places,
+      );
 
       if (dinnerPlace != null &&
           activities.every(
             (activity) => activity.place.name != dinnerPlace.name,
           )) {
         activities.add(
-          DayActivity(
-            timeLabel: 'Dinner idea',
-            place: dinnerPlace,
-          ),
+          DayActivity(timeLabel: 'Dinner idea', place: dinnerPlace),
         );
       }
     }
 
-    if (activities.isEmpty && _places.isNotEmpty) {
+    if (activities.isEmpty && places.isNotEmpty) {
       final fallbackCount = trip.days <= 2 ? 4 : 3;
 
-      for (int i = 0; i < _places.length && activities.length < fallbackCount; i++) {
-        final place = _places[(dayIndex * fallbackCount + i) % _places.length];
+      for (
+        int i = 0;
+        i < places.length && activities.length < fallbackCount;
+        i++
+      ) {
+        final place = places[(dayIndex * fallbackCount + i) % places.length];
 
         if (_usedPlacesGlobally.contains(place.name)) {
           continue;
@@ -707,110 +712,98 @@ class _PlanScreenState extends State<PlanScreen> {
       '&query=${place.latitude},${place.longitude}',
     );
 
-    await launchUrl(
-      url,
-      mode: LaunchMode.externalApplication,
-    );
+    await launchUrl(url, mode: LaunchMode.externalApplication);
   }
+
   Future<void> _saveTripToFirestore() async {
-  final trip = widget.trip;
-  if (trip == null) return;
+    final planProvider = Provider.of<PlanProvider>(context, listen: false);
+    final trip = widget.trip;
+    if (trip == null) return;
 
-  setState(() {
-    _isSavingTrip = true;
-  });
+    final places = planProvider.places.cast<PlaceSuggestion>();
 
-  _usedPlacesGlobally.clear();
+    planProvider.setSavingTrip(true);
 
-  final plannedDays = <Map<String, dynamic>>[];
-  final previewPlaces = <Map<String, dynamic>>[];
+    _usedPlacesGlobally.clear();
 
-  for (int dayIndex = 0; dayIndex < trip.days; dayIndex++) {
-    final activities = _activitiesForDay(dayIndex, trip);
+    final plannedDays = <Map<String, dynamic>>[];
+    final previewPlaces = <Map<String, dynamic>>[];
 
-    final activityData = activities.map((activity) {
-      return {
-        'timeLabel': activity.timeLabel,
+    for (int dayIndex = 0; dayIndex < trip.days; dayIndex++) {
+      final activities = _activitiesForDay(dayIndex, trip, places);
 
-        'placeId': activity.place.id,
-        'placeName': activity.place.name,
-        'address': activity.place.address,
-        'category': activity.place.category,
+      final activityData = activities.map((activity) {
+        return {
+          'timeLabel': activity.timeLabel,
 
-        'latitude': activity.place.latitude,
-        'longitude': activity.place.longitude,
+          'placeId': activity.place.id,
+          'placeName': activity.place.name,
+          'address': activity.place.address,
+          'category': activity.place.category,
 
-        'rating': activity.place.rating,
-        'imageUrl': activity.place.imageUrl,
-      };
-    }).toList();
+          'latitude': activity.place.latitude,
+          'longitude': activity.place.longitude,
 
-    plannedDays.add({
-      'dayNumber': dayIndex + 1,
-      'activities': activityData,
-    });
+          'rating': activity.place.rating,
+          'imageUrl': activity.place.imageUrl,
+        };
+      }).toList();
 
-    if (activities.isNotEmpty) {
-      final preview = activities.first.place;
+      plannedDays.add({'dayNumber': dayIndex + 1, 'activities': activityData});
 
-      previewPlaces.add({
-        'placeName': preview.name,
-        'imageUrl': preview.imageUrl,
-      });
+      if (activities.isNotEmpty) {
+        final preview = activities.first.place;
+
+        previewPlaces.add({
+          'placeName': preview.name,
+          'imageUrl': preview.imageUrl,
+        });
+      }
     }
-  }
 
-  await FirestoreService.saveTrip(
-    trip,
-    plannedDays: plannedDays,
-    placesPreview: previewPlaces,
-  );
-
-  if (!mounted) return;
-
-  setState(() {
-    _isSavingTrip = false;
-  });
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text(
-        'Trip saved successfully ❤️',
-      ),
-    ),
-  );
-}
-
-Future<void> _toggleFavorite(PlaceSuggestion place) async {
-  final trip = widget.trip;
-  if (trip == null) return;
-
-  final isFavorite = _favoritePlaceIds.contains(place.id);
-
-  setState(() {
-    if (isFavorite) {
-      _favoritePlaceIds.remove(place.id);
-    } else {
-      _favoritePlaceIds.add(place.id);
-    }
-  });
-
-  if (isFavorite) {
-    await FirestoreService.removeFavoritePlace(place.id);
-  } else {
-    await FirestoreService.saveFavoritePlace(
-      placeId: place.id,
-      name: place.name,
-      address: place.address,
-      city: trip.city,
-      category: place.category,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      imageUrl: place.imageUrl,
-      rating: place.rating,
+    await FirestoreService.saveTrip(
+      trip,
+      plannedDays: plannedDays,
+      placesPreview: previewPlaces,
     );
+
+    if (!mounted) return;
+    planProvider.setSavingTrip(false);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Trip saved successfully ❤️')));
   }
-}
+
+  Future<void> _toggleFavorite(PlaceSuggestion place) async {
+    final trip = widget.trip;
+    if (trip == null) return;
+
+    final favoritesProvider = Provider.of<FavoritesProvider>(
+      context,
+      listen: false,
+    );
+
+    favoritesProvider.toggleFavorite(place.id);
+
+    final isFavorite = favoritesProvider.isFavorite(place.id);
+
+    if (isFavorite) {
+      await FirestoreService.saveFavoritePlace(
+        placeId: place.id,
+        name: place.name,
+        address: place.address,
+        city: trip.city,
+        category: place.category,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        imageUrl: place.imageUrl,
+        rating: place.rating,
+      );
+    } else {
+      await FirestoreService.removeFavoritePlace(place.id);
+    }
+  }
 
   String _budgetStyle(double dailyBudget) {
     if (dailyBudget < 80) {
@@ -852,11 +845,47 @@ Future<void> _toggleFavorite(PlaceSuggestion place) async {
   }
 
   @override
-Widget build(BuildContext context) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  final trip = widget.trip;
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final planProvider = Provider.of<PlanProvider>(context);
+    final places = planProvider.places.cast<PlaceSuggestion>();
+    final weatherDays = planProvider.weatherDays.cast<WeatherDay>();
+    final trip = widget.trip;
 
-  if (trip == null) {
+    if (trip == null) {
+      return SafeArea(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [
+                      const Color(0xFF0F172A),
+                      const Color(0xFF1E1B4B),
+                      const Color(0xFF312E81),
+                    ]
+                  : [
+                      const Color(0xFFF8FAFC),
+                      const Color(0xFFEDE9FE),
+                      const Color(0xFFFDF2F8),
+                    ],
+            ),
+          ),
+          child: Center(
+            child: Text(
+              'Create a trip first to see your plan.',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF111827),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final dailyBudget = trip.budget / trip.days;
+
     return SafeArea(
       child: Container(
         decoration: BoxDecoration(
@@ -872,285 +901,260 @@ Widget build(BuildContext context) {
                     const Color(0xFFEDE9FE),
                     const Color(0xFFFDF2F8),
                   ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
-        child: Center(
-          child: Text(
-            'Create a trip first to see your plan.',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : const Color(0xFF111827),
-            ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _heroCard(trip, dailyBudget, places),
+
+              const SizedBox(height: 30),
+
+              Text(
+                'Your daily trip plan',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF111827),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Each day is organized into morning, lunch, afternoon and evening activities.',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              if (planProvider.isLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else ...[
+                Builder(
+                  builder: (context) {
+                    _usedPlacesGlobally.clear();
+
+                    return Column(
+                      children: List.generate(trip.days, (index) {
+                        final weather = index < weatherDays.length
+                            ? weatherDays[index]
+                            : null;
+
+                        final activities = _activitiesForDay(
+                          index,
+                          trip,
+                          places,
+                        );
+
+                        return _dayPlanCard(
+                          dayNumber: index + 1,
+                          weather: weather,
+                          activities: activities,
+                          dailyBudget: dailyBudget,
+                        );
+                      }),
+                    );
+                  },
+                ),
+              ],
+            ],
           ),
         ),
       ),
     );
   }
 
-  final dailyBudget = trip.budget / trip.days;
+  Widget _heroCard(
+    Trip trip,
+    double dailyBudget,
+    List<PlaceSuggestion> places,
+  ) {
+    final cityName = _displayCityName(trip, places);
 
-  return SafeArea(
-    child: Container(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(26),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A),
-                  const Color(0xFF1E1B4B),
-                  const Color(0xFF312E81),
-                ]
-              : [
-                  const Color(0xFFF8FAFC),
-                  const Color(0xFFEDE9FE),
-                  const Color(0xFFFDF2F8),
-                ],
+        borderRadius: BorderRadius.circular(34),
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: [Color(0xFF312E81), Color(0xFF6D5DFF), Color(0xFF8B5CF6)],
         ),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _heroCard(trip, dailyBudget),
-
-            const SizedBox(height: 30),
-
-            Text(
-              'Your daily trip plan',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white : const Color(0xFF111827),
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              'Each day is organized into morning, lunch, afternoon and evening activities.',
-              style: TextStyle(
-                fontSize: 15,
-                color: isDark ? Colors.white70 : const Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else ...[
-              Builder(
-                builder: (context) {
-                  _usedPlacesGlobally.clear();
-
-                  return Column(
-                    children: List.generate(trip.days, (index) {
-                final weather =
-                    index < _weatherDays.length ? _weatherDays[index] : null;
-
-                final activities = _activitiesForDay(index, trip);
-
-                      return _dayPlanCard(
-                        dayNumber: index + 1,
-                        weather: weather,
-                        activities: activities,
-                        dailyBudget: dailyBudget,
-                      );
-                    }),
-                  );
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    ),
-  );
-}
-  Widget _heroCard(Trip trip, double dailyBudget) {
-  final cityName = _displayCityName(trip);
-
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(26),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(34),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color(0xFF312E81),
-          Color(0xFF6D5DFF),
-          Color(0xFF8B5CF6),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6D5DFF).withOpacity(0.35),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
         ],
       ),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF6D5DFF).withOpacity(0.35),
-          blurRadius: 28,
-          offset: const Offset(0, 14),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.flight_takeoff_rounded,
+                  color: Colors.white,
+                  size: 31,
+                ),
               ),
-              child: const Icon(
-                Icons.flight_takeoff_rounded,
-                color: Colors.white,
-                size: 31,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trip to $cityName',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'AI Smart Itinerary',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ],
+          ),
+
+          const SizedBox(height: 28),
+
+          Row(
+            children: [
+              Expanded(
+                child: _heroInfo(
+                  icon: Icons.calendar_month,
+                  title: 'Duration',
+                  value: '${trip.days} Days',
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _heroInfo(
+                  icon: Icons.favorite,
+                  title: 'Interests',
+                  value: trip.interests.join(' • '),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: _budgetColor(dailyBudget).withOpacity(0.22),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Trip to $cityName',
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${_budgetStyle(dailyBudget)} budget travel style',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 30,
                       fontWeight: FontWeight.w900,
-                      height: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'AI Smart Itinerary',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w800,
                       fontSize: 15,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-
-        const SizedBox(height: 28),
-
-        Row(
-          children: [
-            Expanded(
-              child: _heroInfo(
-                icon: Icons.calendar_month,
-                title: 'Duration',
-                value: '${trip.days} Days',
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _heroInfo(
-                icon: Icons.favorite,
-                title: 'Interests',
-                value: trip.interests.join(' • '),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 14),
-
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: _budgetColor(dailyBudget).withOpacity(0.22),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.15)),
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.auto_awesome, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '${_budgetStyle(dailyBudget)} budget travel style',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
+
+          const SizedBox(height: 14),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.attach_money, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '\$${trip.budget.toStringAsFixed(0)} Budget • ${_estimatedDayCost(dailyBudget)} / day',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: Provider.of<PlanProvider>(context).isSavingTrip
+                  ? null
+                  : _saveTripToFirestore,
+              icon: const Icon(Icons.bookmark_add),
+              label: Text(
+                Provider.of<PlanProvider>(context).isSavingTrip
+                    ? 'Saving...'
+                    : 'Save Trip',
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 14),
-
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.14),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.15)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.attach_money, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '\$${trip.budget.toStringAsFixed(0)} Budget • ${_estimatedDayCost(dailyBudget)} / day',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF6D5DFF),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
                 ),
               ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 18),
-
-        SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: ElevatedButton.icon(
-            onPressed: _isSavingTrip ? null : _saveTripToFirestore,
-            icon: const Icon(Icons.bookmark_add),
-            label: Text(
-              _isSavingTrip ? 'Saving...' : 'Save Trip',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF6D5DFF),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   Widget _heroInfo({
     required IconData icon,
@@ -1194,329 +1198,325 @@ Widget build(BuildContext context) {
   }
 
   Widget _dayPlanCard({
-  required int dayNumber,
-  required WeatherDay? weather,
-  required List<DayActivity> activities,
-  required double dailyBudget,
-}) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+    required int dayNumber,
+    required WeatherDay? weather,
+    required List<DayActivity> activities,
+    required double dailyBudget,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  return Container(
-    margin: const EdgeInsets.only(bottom: 18),
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: isDark ? const Color(0xFF1E293B) : Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.04),
-          blurRadius: 14,
-          offset: const Offset(0, 8),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withOpacity(0.12)
-                    : const Color(0xFFE0E7FF),
-                borderRadius: BorderRadius.circular(16),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.12)
+                      : const Color(0xFFE0E7FF),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Text(
+                    '$dayNumber',
+                    style: const TextStyle(
+                      color: Color(0xFF8B5CF6),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
               ),
-              child: Center(
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Day $dayNumber',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : const Color(0xFF111827),
+                      ),
+                    ),
+                    if (weather != null)
+                      Text(
+                        '${_weatherIcon(weather.weatherCode)} ${weather.maxTemp.round()}° / ${weather.minTemp.round()}° • Rain ${weather.rainProbability}%',
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.white70
+                              : const Color(0xFF64748B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Estimated daily cost: ${_estimatedDayCost(dailyBudget)}',
+                      style: const TextStyle(
+                        color: Color(0xFF8B5CF6),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: _budgetColor(dailyBudget).withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(30),
+                ),
                 child: Text(
-                  '$dayNumber',
-                  style: const TextStyle(
-                    color: Color(0xFF8B5CF6),
+                  _budgetStyle(dailyBudget),
+                  style: TextStyle(
+                    color: _budgetColor(dailyBudget),
                     fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (activities.isEmpty)
+            Text(
+              'No places found for this day.',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            Column(
+              children: activities.map((activity) {
+                return _placeMiniCard(activity.place, activity.timeLabel);
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _placeMiniCard(PlaceSuggestion place, String timeLabel) {
+    final favoritesProvider = Provider.of<FavoritesProvider>(context);
+    final isFavorite = favoritesProvider.isFavorite(place.id);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      height: 260,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.18 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: place.imageUrl != null
+                  ? Image.network(
+                      place.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return _imageFallback(place.category);
+                      },
+                    )
+                  : _imageFallback(place.category),
+            ),
+
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(isDark ? 0.18 : 0.10),
+                      Colors.black.withOpacity(isDark ? 0.82 : 0.72),
+                    ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
+
+            Positioned(
+              top: 16,
+              right: 16,
+              child: InkWell(
+                onTap: () => _toggleFavorite(place),
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(isDark ? 0.55 : 0.38),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.30)),
+                  ),
+                  child: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: isFavorite ? const Color(0xFFFF4D6D) : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Day $dayNumber',
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.white : const Color(0xFF111827),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
                     ),
-                  ),
-                  if (weather != null)
-                    Text(
-                      '${_weatherIcon(weather.weatherCode)} ${weather.maxTemp.round()}° / ${weather.minTemp.round()}° • Rain ${weather.rainProbability}%',
-                      style: TextStyle(
-                        color: isDark ? Colors.white70 : const Color(0xFF64748B),
-                        fontWeight: FontWeight.w700,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(isDark ? 0.22 : 0.18),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withOpacity(0.25)),
+                    ),
+                    child: Text(
+                      timeLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
                       ),
                     ),
-                  const SizedBox(height: 4),
+                  ),
+
+                  const SizedBox(height: 10),
+
                   Text(
-                    'Estimated daily cost: ${_estimatedDayCost(dailyBudget)}',
+                    place.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF8B5CF6),
+                      color: Colors.white,
+                      fontSize: 22,
                       fontWeight: FontWeight.w900,
-                      fontSize: 13,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Row(
+                    children: [
+                      Icon(
+                        _interestIcon(place.category),
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        place.category,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (place.rating != null) ...[
+                        const SizedBox(width: 12),
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFBBF24),
+                          size: 20,
+                        ),
+                        Text(
+                          place.rating!.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    place.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  OutlinedButton.icon(
+                    onPressed: () => _openInMaps(place),
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text(
+                      'Open in Maps',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white.withOpacity(0.65)),
+                      backgroundColor: Colors.white.withOpacity(
+                        isDark ? 0.18 : 0.12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _budgetColor(dailyBudget).withOpacity(0.16),
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Text(
-                _budgetStyle(dailyBudget),
-                style: TextStyle(
-                  color: _budgetColor(dailyBudget),
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-            ),
           ],
         ),
-        const SizedBox(height: 16),
-        if (activities.isEmpty)
-          Text(
-            'No places found for this day.',
-            style: TextStyle(
-              color: isDark ? Colors.white70 : const Color(0xFF64748B),
-              fontWeight: FontWeight.w600,
-            ),
-          )
-        else
-          Column(
-            children: activities.map((activity) {
-              return _placeMiniCard(activity.place, activity.timeLabel);
-            }).toList(),
-          ),
-      ],
-    ),
-  );
-}
-
- Widget _placeMiniCard(PlaceSuggestion place, String timeLabel) {
-  final isFavorite = _favoritePlaceIds.contains(place.id);
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-
-  return Container(
-    margin: const EdgeInsets.only(bottom: 16),
-    height: 260,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(26),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(isDark ? 0.18 : 0.08),
-          blurRadius: 18,
-          offset: const Offset(0, 8),
-        ),
-      ],
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(26),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: place.imageUrl != null
-                ? Image.network(
-                    place.imageUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return _imageFallback(place.category);
-                    },
-                  )
-                : _imageFallback(place.category),
-          ),
-
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(isDark ? 0.18 : 0.10),
-                    Colors.black.withOpacity(isDark ? 0.82 : 0.72),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            top: 16,
-            right: 16,
-            child: InkWell(
-              onTap: () => _toggleFavorite(place),
-              borderRadius: BorderRadius.circular(30),
-              child: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(isDark ? 0.55 : 0.38),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.30),
-                  ),
-                ),
-                child: Icon(
-                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: isFavorite ? const Color(0xFFFF4D6D) : Colors.white,
-                ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            left: 18,
-            right: 18,
-            bottom: 18,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(isDark ? 0.22 : 0.18),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.25),
-                    ),
-                  ),
-                  child: Text(
-                    timeLabel,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                Text(
-                  place.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Row(
-                  children: [
-                    Icon(
-                      _interestIcon(place.category),
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      place.category,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (place.rating != null) ...[
-                      const SizedBox(width: 12),
-                      const Icon(
-                        Icons.star_rounded,
-                        color: Color(0xFFFBBF24),
-                        size: 20,
-                      ),
-                      Text(
-                        place.rating!.toStringAsFixed(1),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  place.address,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                OutlinedButton.icon(
-                  onPressed: () => _openInMaps(place),
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: const Text(
-                    'Open in Maps',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withOpacity(0.65),
-                    ),
-                    backgroundColor: Colors.white.withOpacity(
-                      isDark ? 0.18 : 0.12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _imageFallback(String category) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  return Container(
-    height: 180,
-    width: double.infinity,
-    color: isDark
-        ? const Color(0xFF1E293B)
-        : const Color(0xFFE0E7FF),
-    child: Icon(
-      _interestIcon(category),
-      color: isDark
-          ? const Color(0xFF8B5CF6)
-          : const Color(0xFF4338CA),
-      size: 46,
-    ),
-  );
-}
+    return Container(
+      height: 180,
+      width: double.infinity,
+      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE0E7FF),
+      child: Icon(
+        _interestIcon(category),
+        color: isDark ? const Color(0xFF8B5CF6) : const Color(0xFF4338CA),
+        size: 46,
+      ),
+    );
+  }
 }

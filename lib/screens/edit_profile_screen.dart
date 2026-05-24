@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../providers/profile_provider.dart';
+import 'package:provider/provider.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -34,7 +36,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final newEmail = emailController.text.trim();
     final newPassword = passwordController.text.trim();
 
-    setState(() => isSaving = true);
+    Provider.of<ProfileProvider>(context, listen: false).setSaving(true);
 
     try {
       if (newName.isNotEmpty) {
@@ -83,7 +85,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() => isSaving = false);
+        Provider.of<ProfileProvider>(context, listen: false).setSaving(false);
       }
     }
   }
@@ -98,11 +100,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profileProvider = Provider.of<ProfileProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Container(
           decoration: BoxDecoration(
@@ -132,10 +136,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(30),
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF6D5DFF),
-                        Color(0xFFEC4899),
-                      ],
+                      colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
                     ),
                   ),
                   child: Row(
@@ -179,7 +180,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   label: 'New Password',
                   icon: Icons.lock_outline,
                   isDark: isDark,
-                  obscureText: hidePassword,
+                  obscureText: profileProvider.hidePassword,
                   suffixIcon: IconButton(
                     icon: Icon(
                       hidePassword
@@ -187,9 +188,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           : Icons.visibility_outlined,
                     ),
                     onPressed: () {
-                      setState(() {
-                        hidePassword = !hidePassword;
-                      });
+                      profileProvider.togglePasswordVisibility();
                     },
                   ),
                 ),
@@ -198,8 +197,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton.icon(
-                    onPressed: isSaving ? null : _saveChanges,
-                    icon: isSaving
+                    onPressed: profileProvider.isSaving ? null : _saveChanges,
+                    icon: profileProvider.isSaving
                         ? const SizedBox(
                             width: 20,
                             height: 20,
@@ -207,7 +206,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           )
                         : const Icon(Icons.save_outlined),
                     label: Text(
-                      isSaving ? 'Saving...' : 'Save Changes',
+                      profileProvider.isSaving ? 'Saving...' : 'Save Changes',
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 16,

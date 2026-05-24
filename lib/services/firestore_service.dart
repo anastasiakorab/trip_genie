@@ -23,22 +23,6 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
-  static String _tripDocumentId(Trip trip) {
-    final city = trip.city
-        .toLowerCase()
-        .trim()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^_|_$'), '');
-
-    final start =
-        '${trip.startDate.year}-${trip.startDate.month.toString().padLeft(2, '0')}-${trip.startDate.day.toString().padLeft(2, '0')}';
-
-    final end =
-        '${trip.endDate.year}-${trip.endDate.month.toString().padLeft(2, '0')}-${trip.endDate.day.toString().padLeft(2, '0')}';
-
-    return '${city}_${start}_$end';
-  }
 
   static Future<void> saveTrip(
   Trip trip, {

@@ -5,6 +5,9 @@ import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/web_camera_provider.dart';
 
 class WebCameraScreen extends StatefulWidget {
   const WebCameraScreen({super.key});
@@ -20,16 +23,20 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
   html.VideoElement? _videoElement;
   html.MediaStream? _mediaStream;
 
-  bool _isCameraReady = false;
-  String? _errorMessage;
-
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+
+    Future.microtask(() {
+      Provider.of<WebCameraProvider>(context, listen: false).reset();
+      _initializeCamera();
+    });
   }
 
   Future<void> _initializeCamera() async {
+    final cameraProvider =
+        Provider.of<WebCameraProvider>(context, listen: false);
+
     try {
       _videoElement = html.VideoElement()
         ..autoplay = true
@@ -49,9 +56,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
       final mediaDevices = html.window.navigator.mediaDevices;
 
       if (mediaDevices == null) {
-        setState(() {
-          _errorMessage = 'Camera is not available in this browser.';
-        });
+        cameraProvider.setError('Camera is not available in this browser.');
         return;
       }
 
@@ -71,34 +76,31 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
 
       if (!mounted) return;
 
-      setState(() {
-        _isCameraReady = true;
-      });
+      cameraProvider.setReady(true);
     } catch (e) {
       if (!mounted) return;
 
-      setState(() {
-        _errorMessage =
-            'Could not open camera. Please allow camera permission in Chrome.';
-      });
+      cameraProvider.setError(
+        'Could not open camera. Please allow camera permission in Chrome.',
+      );
     }
   }
 
   Future<void> _capturePhoto() async {
+    final cameraProvider =
+        Provider.of<WebCameraProvider>(context, listen: false);
+
     final video = _videoElement;
 
-    if (video == null || !_isCameraReady) return;
+    if (video == null || !cameraProvider.isCameraReady) return;
 
     final width = video.videoWidth > 0 ? video.videoWidth : 640;
     final height = video.videoHeight > 0 ? video.videoHeight : 640;
 
-    final canvas = html.CanvasElement(
-      width: width,
-      height: height,
-    );
+    final canvas = html.CanvasElement(width: width, height: height);
 
-    final context = canvas.context2D;
-    context.drawImageScaled(video, 0, 0, width, height);
+    final canvasContext = canvas.context2D;
+    canvasContext.drawImageScaled(video, 0, 0, width, height);
 
     final dataUrl = canvas.toDataUrl('image/png');
     final base64Data = dataUrl.split(',').last;
@@ -106,7 +108,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
 
     if (!mounted) return;
 
-    Navigator.pop(context as BuildContext, bytes);
+    Navigator.pop(context, bytes);
   }
 
   void _stopCamera() {
@@ -127,6 +129,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cameraProvider = Provider.of<WebCameraProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -177,9 +180,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
               Expanded(
                 child: Container(
                   width: double.infinity,
@@ -189,12 +190,12 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(26),
-                    child: _errorMessage != null
+                    child: cameraProvider.errorMessage != null
                         ? Center(
                             child: Padding(
                               padding: const EdgeInsets.all(24),
                               child: Text(
-                                _errorMessage!,
+                                cameraProvider.errorMessage!,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -203,7 +204,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
                               ),
                             ),
                           )
-                        : _isCameraReady
+                        : cameraProvider.isCameraReady
                             ? HtmlElementView(viewType: _viewType)
                             : const Center(
                                 child: CircularProgressIndicator(
@@ -213,14 +214,14 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 22),
-
               SizedBox(
                 width: double.infinity,
                 height: 58,
                 child: ElevatedButton.icon(
-                  onPressed: _isCameraReady ? _capturePhoto : null,
+                  onPressed: cameraProvider.isCameraReady
+                      ? _capturePhoto
+                      : null,
                   icon: const Icon(Icons.camera_alt),
                   label: const Text(
                     'Capture Photo',

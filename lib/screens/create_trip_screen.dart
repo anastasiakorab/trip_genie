@@ -3,12 +3,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:trip_genie/services/open_meteo_service.dart';
 
 import '../models/trip.dart';
+import '../providers/create_trip_provider.dart';
+import '../services/google_places_service.dart';
 import '../services/location_service.dart';
-import '../services/google_places_service.dart';
-import 'package:geocoding/geocoding.dart';
-import '../services/google_places_service.dart';
 
 class LocationSuggestion {
   final String title;
@@ -25,10 +26,7 @@ class LocationSuggestion {
 class CreateTripScreen extends StatefulWidget {
   final Function(Trip trip) onTripCreated;
 
-  const CreateTripScreen({
-    super.key,
-    required this.onTripCreated,
-  });
+  const CreateTripScreen({super.key, required this.onTripCreated});
 
   @override
   State<CreateTripScreen> createState() => _CreateTripScreenState();
@@ -39,18 +37,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   final _budgetController = TextEditingController();
   final _cityFocusNode = FocusNode();
 
-  DateTime? _startDate;
-  DateTime? _endDate;
-
-  double? _selectedLatitude;
-  double? _selectedLongitude;
-
-  bool _gettingCurrentLocation = false;
-
-  final Set<String> _selectedInterests = {'Museums'};
-
-  List<LocationSuggestion> _locationSuggestions = [];
-  bool _isSearchingLocation = false;
   Timer? _debounce;
 
   final List<String> _interests = [
@@ -71,68 +57,60 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   Future<void> _searchLocations(String query) async {
+    final tripProvider = Provider.of<CreateTripProvider>(
+      context,
+      listen: false,
+    );
+
     if (query.trim().length < 2) {
-      setState(() {
-        _locationSuggestions = [];
-      });
+      tripProvider.clearLocationSuggestions();
       return;
     }
 
-    setState(() {
-      _isSearchingLocation = true;
-    });
-
-    final url = Uri.parse(
-      'https://geocoding-api.open-meteo.com/v1/search'
-      '?name=${Uri.encodeComponent(query)}'
-      '&count=8'
-      '&language=en'
-      '&format=json',
-    );
+    tripProvider.setSearchingLocation(true);
 
     try {
-      final response = await http.get(url);
+      final results = await OpenMeteoService.searchCities(query);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final results = data['results'] as List<dynamic>? ?? [];
+      final suggestions = results.map((place) {
+        final name = place['name'] ?? '';
+        final admin1 = place['admin1'] ?? '';
+        final country = place['country'] ?? '';
 
-        final suggestions = results.map((place) {
-          final name = place['name'] ?? '';
-          final admin1 = place['admin1'] ?? '';
-          final country = place['country'] ?? '';
+        final title = [
+          name,
+          if (admin1.toString().isNotEmpty) admin1,
+          if (country.toString().isNotEmpty) country,
+        ].join(', ');
 
-          final title = [
-            name,
-            if (admin1.toString().isNotEmpty) admin1,
-            if (country.toString().isNotEmpty) country,
-          ].join(', ');
+        return LocationSuggestion(
+          title: title,
+          latitude: (place['latitude'] as num).toDouble(),
+          longitude: (place['longitude'] as num).toDouble(),
+        );
+      }).toList();
 
-          return LocationSuggestion(
-            title: title,
-            latitude: (place['latitude'] as num).toDouble(),
-            longitude: (place['longitude'] as num).toDouble(),
-          );
-        }).toList();
+      if (!mounted) return;
 
-        setState(() {
-          _locationSuggestions = suggestions;
-        });
-      }
+      tripProvider.setLocationSuggestions(suggestions);
     } catch (e) {
-      setState(() {
-        _locationSuggestions = [];
-      });
+      if (!mounted) return;
+
+      tripProvider.clearLocationSuggestions();
     } finally {
-      setState(() {
-        _isSearchingLocation = false;
-      });
+      if (mounted) {
+        tripProvider.setSearchingLocation(false);
+      }
     }
   }
 
   void _onCityChanged(String value) {
-    _selectedLatitude = null;
-    _selectedLongitude = null;
+    final tripProvider = Provider.of<CreateTripProvider>(
+      context,
+      listen: false,
+    );
+
+    tripProvider.clearSelectedCoordinates();
 
     _debounce?.cancel();
 
@@ -142,124 +120,131 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   Future<void> _useCurrentLocation() async {
-  setState(() {
-    _gettingCurrentLocation = true;
-  });
-
-  final position = await LocationService.getCurrentLocation();
-
-  if (position == null) {
-    setState(() {
-      _gettingCurrentLocation = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Location permission denied or unavailable'),
-      ),
-    );
-    return;
-  }
-
-  String locationName = 'Current location';
-
-  try {
-    final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/geocode/json'
-      '?latlng=${position.latitude},${position.longitude}'
-      '&key=$googleApiKey',
+    final tripProvider = Provider.of<CreateTripProvider>(
+      context,
+      listen: false,
     );
 
-    final response = await http.get(url);
+    tripProvider.setGettingCurrentLocation(true);
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final results = data['results'] as List<dynamic>? ?? [];
+    final position = await LocationService.getCurrentLocation();
 
-      for (final result in results) {
-        final components =
-            result['address_components'] as List<dynamic>? ?? [];
+    if (position == null) {
+      tripProvider.setGettingCurrentLocation(false);
 
-        for (final component in components) {
-          final types = component['types'] as List<dynamic>? ?? [];
+      if (!mounted) return;
 
-          if (types.contains('locality') ||
-    types.contains('administrative_area_level_1') ||
-    types.contains('postal_town')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location permission denied or unavailable'),
+        ),
+      );
+      return;
+    }
 
-  locationName = component['long_name'].toString();
-  break;
-}
+    String locationName = 'Current location';
+
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json'
+        '?latlng=${position.latitude},${position.longitude}'
+        '&key=$googleApiKey',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final results = data['results'] as List<dynamic>? ?? [];
+
+        for (final result in results) {
+          final components =
+              result['address_components'] as List<dynamic>? ?? [];
+
+          for (final component in components) {
+            final types = component['types'] as List<dynamic>? ?? [];
+
+            if (types.contains('locality') ||
+                types.contains('administrative_area_level_1') ||
+                types.contains('postal_town')) {
+              locationName = component['long_name'].toString();
+              break;
+            }
+          }
+
+          if (locationName != 'Current location') break;
         }
+      }
+    } catch (e) {
+      locationName = 'Current location';
+    }
 
-        if (locationName != 'Current location') break;
+    if (locationName == 'Current location') {
+      if (position.latitude > 41.8 &&
+          position.latitude < 42.2 &&
+          position.longitude > 21.2 &&
+          position.longitude < 21.7) {
+        locationName = 'Skopje';
       }
     }
-  } catch (e) {
-    locationName = 'Current location';
-  }
-if (locationName == 'Current location') {
-  if (position.latitude > 41.8 &&
-      position.latitude < 42.2 &&
-      position.longitude > 21.2 &&
-      position.longitude < 21.7) {
-    locationName = 'Skopje';
-  }
-}
 
-  setState(() {
+    if (!mounted) return;
+
     _cityController.text = locationName.trim();
-    print("Detected city: $locationName");
-    _selectedLatitude = position.latitude;
-    _selectedLongitude = position.longitude;
-    _locationSuggestions = [];
-    _gettingCurrentLocation = false;
-  });
 
-  FocusScope.of(context).unfocus();
+    tripProvider.setSelectedLocation(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Using your current location: $locationName'),
-    ),
-  );
-}
+    tripProvider.setGettingCurrentLocation(false);
+
+    tripProvider.clearLocationSuggestions();
+
+    FocusScope.of(context).unfocus();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Using your current location: $locationName')),
+    );
+  }
 
   Future<void> _pickStartDate() async {
+    final tripProvider = Provider.of<CreateTripProvider>(
+      context,
+      listen: false,
+    );
+
     final now = DateTime.now();
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _startDate ?? now,
+      initialDate: tripProvider.startDate ?? now,
       firstDate: now,
       lastDate: DateTime(now.year + 2),
     );
 
     if (picked != null) {
-      setState(() {
-        _startDate = picked;
-
-        if (_endDate != null && _endDate!.isBefore(picked)) {
-          _endDate = picked;
-        }
-      });
+      tripProvider.setStartDate(picked);
     }
   }
 
   Future<void> _pickEndDate() async {
+    final tripProvider = Provider.of<CreateTripProvider>(
+      context,
+      listen: false,
+    );
+
     final now = DateTime.now();
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _endDate ?? _startDate ?? now,
-      firstDate: _startDate ?? now,
+      initialDate: tripProvider.endDate ?? tripProvider.startDate ?? now,
+      firstDate: tripProvider.startDate ?? now,
       lastDate: DateTime(now.year + 2),
     );
 
     if (picked != null) {
-      setState(() {
-        _endDate = picked;
-      });
+      tripProvider.setEndDate(picked);
     }
   }
 
@@ -269,12 +254,17 @@ if (locationName == 'Current location') {
   }
 
   void _generateTrip() {
+    final tripProvider = Provider.of<CreateTripProvider>(
+      context,
+      listen: false,
+    );
+
     if (_cityController.text.trim().isEmpty ||
         _budgetController.text.trim().isEmpty ||
-        _startDate == null ||
-        _endDate == null ||
-        _selectedLatitude == null ||
-        _selectedLongitude == null) {
+        tripProvider.startDate == null ||
+        tripProvider.endDate == null ||
+        tripProvider.selectedLatitude == null ||
+        tripProvider.selectedLongitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please choose destination, dates and budget'),
@@ -285,12 +275,12 @@ if (locationName == 'Current location') {
 
     final trip = Trip(
       city: _cityController.text.trim(),
-      startDate: _startDate!,
-      endDate: _endDate!,
+      startDate: tripProvider.startDate!,
+      endDate: tripProvider.endDate!,
       budget: double.tryParse(_budgetController.text.trim()) ?? 0,
-      interests: _selectedInterests.toList(),
-      latitude: _selectedLatitude,
-      longitude: _selectedLongitude,
+      interests: tripProvider.selectedInterests.toList(),
+      latitude: tripProvider.selectedLatitude,
+      longitude: tripProvider.selectedLongitude,
     );
 
     widget.onTripCreated(trip);
@@ -298,10 +288,12 @@ if (locationName == 'Current location') {
 
   @override
   Widget build(BuildContext context) {
+    final tripProvider = Provider.of<CreateTripProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final duration = _startDate != null && _endDate != null
-        ? _endDate!.difference(_startDate!).inDays + 1
+    final duration =
+        tripProvider.startDate != null && tripProvider.endDate != null
+        ? tripProvider.endDate!.difference(tripProvider.startDate!).inDays + 1
         : null;
 
     return SafeArea(
@@ -334,27 +326,20 @@ if (locationName == 'Current location') {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(32),
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF6D5DFF),
-                      Color(0xFFEC4899),
-                    ],
+                    colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
                   ),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x336D5DFF),
                       blurRadius: 24,
                       offset: Offset(0, 10),
-                    )
+                    ),
                   ],
                 ),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.explore_rounded,
-                      color: Colors.white,
-                      size: 42,
-                    ),
+                    Icon(Icons.explore_rounded, color: Colors.white, size: 42),
                     SizedBox(height: 18),
                     Text(
                       'Design your next escape ✈️',
@@ -372,39 +357,34 @@ if (locationName == 'Current location') {
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
-
-              _locationSearchCard(),
-
+              _locationSearchCard(tripProvider),
               const SizedBox(height: 12),
-
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed:
-                      _gettingCurrentLocation ? null : _useCurrentLocation,
+                  onPressed: tripProvider.gettingCurrentLocation
+                      ? null
+                      : _useCurrentLocation,
                   icon: const Icon(Icons.my_location),
                   label: Text(
-                    _gettingCurrentLocation
+                    tripProvider.gettingCurrentLocation
                         ? 'Detecting location...'
                         : 'Use my current location',
                   ),
                 ),
               ),
-
               const SizedBox(height: 18),
-
               Row(
                 children: [
                   Expanded(
                     child: _dateCard(
                       title: 'Departure',
-                      value: _formatDate(_startDate),
+                      value: _formatDate(tripProvider.startDate),
                       icon: Icons.flight_takeoff,
                       onTap: _pickStartDate,
                     ),
@@ -413,14 +393,13 @@ if (locationName == 'Current location') {
                   Expanded(
                     child: _dateCard(
                       title: 'Return',
-                      value: _formatDate(_endDate),
+                      value: _formatDate(tripProvider.endDate),
                       icon: Icons.flight_land,
                       onTap: _pickEndDate,
                     ),
                   ),
                 ],
               ),
-
               if (duration != null) ...[
                 const SizedBox(height: 18),
                 Container(
@@ -432,7 +411,7 @@ if (locationName == 'Current location') {
                       BoxShadow(
                         color: Colors.black.withOpacity(.05),
                         blurRadius: 14,
-                      )
+                      ),
                     ],
                   ),
                   child: Row(
@@ -454,24 +433,21 @@ if (locationName == 'Current location') {
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF111827),
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF111827),
                         ),
-                      )
+                      ),
                     ],
                   ),
-                )
+                ),
               ],
-
               const SizedBox(height: 18),
-
               _inputCard(
                 child: TextField(
                   controller: _budgetController,
                   keyboardType: TextInputType.number,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     icon: const Icon(
@@ -486,9 +462,7 @@ if (locationName == 'Current location') {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
               Text(
                 'What do you enjoy?',
                 style: TextStyle(
@@ -497,14 +471,14 @@ if (locationName == 'Current location') {
                   color: isDark ? Colors.white : const Color(0xFF111827),
                 ),
               ),
-
               const SizedBox(height: 10),
-
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: _interests.map((interest) {
-                  final selected = _selectedInterests.contains(interest);
+                  final selected = tripProvider.selectedInterests.contains(
+                    interest,
+                  );
 
                   return ChoiceChip(
                     label: Text(
@@ -512,43 +486,29 @@ if (locationName == 'Current location') {
                       style: TextStyle(
                         color: selected
                             ? Colors.white
-                            : (isDark
-                                ? Colors.white
-                                : const Color(0xFF111827)),
+                            : (isDark ? Colors.white : const Color(0xFF111827)),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     selected: selected,
                     onSelected: (_) {
-                      setState(() {
-                        if (selected) {
-                          if (_selectedInterests.length > 1) {
-                            _selectedInterests.remove(interest);
-                          }
-                        } else {
-                          _selectedInterests.add(interest);
-                        }
-                      });
+                      tripProvider.toggleInterest(interest);
                     },
                     selectedColor: const Color(0xFF6D5DFF),
-                    backgroundColor:
-                        isDark ? const Color(0xFF1E293B) : Colors.white,
+                    backgroundColor: isDark
+                        ? const Color(0xFF1E293B)
+                        : Colors.white,
                   );
                 }).toList(),
               ),
-
               const SizedBox(height: 35),
-
               Container(
                 width: double.infinity,
                 height: 62,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(22),
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF6D5DFF),
-                      Color(0xFFEC4899),
-                    ],
+                    colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
                   ),
                 ),
                 child: ElevatedButton.icon(
@@ -556,10 +516,7 @@ if (locationName == 'Current location') {
                   icon: const Icon(Icons.auto_awesome),
                   label: const Text(
                     'Generate AI Trip',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
@@ -576,7 +533,7 @@ if (locationName == 'Current location') {
     );
   }
 
-  Widget _locationSearchCard() {
+  Widget _locationSearchCard(CreateTripProvider tripProvider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
@@ -591,10 +548,7 @@ if (locationName == 'Current location') {
             ),
             decoration: InputDecoration(
               border: InputBorder.none,
-              icon: const Icon(
-                Icons.location_city,
-                color: Color(0xFF6D5DFF),
-              ),
+              icon: const Icon(Icons.location_city, color: Color(0xFF6D5DFF)),
               labelText: 'Destination city',
               hintText: 'Where are you going?',
               labelStyle: TextStyle(
@@ -603,7 +557,7 @@ if (locationName == 'Current location') {
               hintStyle: TextStyle(
                 color: isDark ? Colors.white54 : const Color(0xFF94A3B8),
               ),
-              suffixIcon: _isSearchingLocation
+              suffixIcon: tripProvider.isSearchingLocation
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -616,8 +570,7 @@ if (locationName == 'Current location') {
             ),
           ),
         ),
-
-        if (_locationSuggestions.isNotEmpty) ...[
+        if (tripProvider.locationSuggestions.isNotEmpty) ...[
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
@@ -637,13 +590,13 @@ if (locationName == 'Current location') {
               padding: const EdgeInsets.symmetric(vertical: 8),
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _locationSuggestions.length,
+              itemCount: tripProvider.locationSuggestions.length,
               separatorBuilder: (_, __) => Divider(
                 height: 1,
                 color: isDark ? Colors.white12 : Colors.black12,
               ),
               itemBuilder: (context, index) {
-                final location = _locationSuggestions[index];
+                final location = tripProvider.locationSuggestions[index];
 
                 return ListTile(
                   leading: const Icon(
@@ -664,12 +617,14 @@ if (locationName == 'Current location') {
                     ),
                   ),
                   onTap: () {
-                    setState(() {
-                      _cityController.text = location.title;
-                      _selectedLatitude = location.latitude;
-                      _selectedLongitude = location.longitude;
-                      _locationSuggestions = [];
-                    });
+                    _cityController.text = location.title;
+
+                    tripProvider.setSelectedLocation(
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                    );
+
+                    tripProvider.clearLocationSuggestions();
 
                     FocusScope.of(context).unfocus();
                   },
@@ -686,10 +641,7 @@ if (locationName == 'Current location') {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
             ? const Color(0xFF1E293B).withOpacity(.92)
@@ -703,7 +655,7 @@ if (locationName == 'Current location') {
             color: Colors.black.withOpacity(.04),
             blurRadius: 12,
             offset: const Offset(0, 6),
-          )
+          ),
         ],
       ),
       child: child,
@@ -739,10 +691,7 @@ if (locationName == 'Current location') {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              icon,
-              color: const Color(0xFF6D5DFF),
-            ),
+            Icon(icon, color: const Color(0xFF6D5DFF)),
             const SizedBox(height: 14),
             Text(
               title,

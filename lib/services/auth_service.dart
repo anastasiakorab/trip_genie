@@ -59,4 +59,23 @@ class AuthService {
   static Future<void> logout() async {
     await _auth.signOut();
   }
+  static Future<String?> resetPassword({
+  required String email,
+}) async {
+  try {
+    final cleanEmail = email.trim();
+
+    if (cleanEmail.isEmpty) {
+      return 'Please enter your email first.';
+    }
+
+    await _auth.sendPasswordResetEmail(email: cleanEmail);
+
+    return null;
+  } on FirebaseAuthException catch (e) {
+    return '${e.code}: ${e.message ?? "Firebase auth error"}';
+  } catch (e) {
+    return e.toString();
+  }
+}
 }
