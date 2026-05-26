@@ -1,15 +1,15 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:trip_genie/services/open_meteo_service.dart';
 
 import '../models/trip.dart';
 import '../providers/create_trip_provider.dart';
-import '../services/google_places_service.dart';
+import '../services/google_geocoding_service.dart';
 import '../services/location_service.dart';
+import '../services/open_meteo_service.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class LocationSuggestion {
   final String title;
@@ -95,7 +95,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       tripProvider.setLocationSuggestions(suggestions);
     } catch (e) {
       if (!mounted) return;
-
       tripProvider.clearLocationSuggestions();
     } finally {
       if (mounted) {
@@ -127,85 +126,82 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
     tripProvider.setGettingCurrentLocation(true);
 
-    final position = await LocationService.getCurrentLocation();
+    try {
+      final position = await LocationService.getCurrentLocation();
 
-    if (position == null) {
-      tripProvider.setGettingCurrentLocation(false);
+      if (position == null) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location permission denied or unavailable'),
+          ),
+        );
+
+        return;
+      }
+
+      String locationName =
+          await GoogleGeocodingService.getPlaceNameFromCoordinates(
+            latitude: position.latitude,
+            longitude: position.longitude,
+          ) ??
+          'Current location';
+
+      if (locationName == 'Current location') {
+        try {
+          final placemarks = await placemarkFromCoordinates(
+            position.latitude,
+            position.longitude,
+          );
+
+          if (placemarks.isNotEmpty) {
+            final place = placemarks.first;
+
+            locationName = place.locality?.isNotEmpty == true
+                ? place.locality!
+                : place.subLocality?.isNotEmpty == true
+                ? place.subLocality!
+                : place.subAdministrativeArea?.isNotEmpty == true
+                ? place.subAdministrativeArea!
+                : place.administrativeArea?.isNotEmpty == true
+                ? place.administrativeArea!
+                : 'Current location';
+          }
+        } catch (_) {}
+      }
 
       if (!mounted) return;
 
+      _cityController.text = locationName.trim();
+
+      tripProvider.setSelectedLocation(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        tripProvider.setShowLocationMap(true);
+      });
+
+      tripProvider.clearLocationSuggestions();
+
+      FocusScope.of(context).unfocus();
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location permission denied or unavailable'),
-        ),
+        SnackBar(content: Text('Using your current location: $locationName')),
       );
-      return;
-    }
-
-    String locationName = 'Current location';
-
-    try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/geocode/json'
-        '?latlng=${position.latitude},${position.longitude}'
-        '&key=$googleApiKey',
-      );
-
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final results = data['results'] as List<dynamic>? ?? [];
-
-        for (final result in results) {
-          final components =
-              result['address_components'] as List<dynamic>? ?? [];
-
-          for (final component in components) {
-            final types = component['types'] as List<dynamic>? ?? [];
-
-            if (types.contains('locality') ||
-                types.contains('administrative_area_level_1') ||
-                types.contains('postal_town')) {
-              locationName = component['long_name'].toString();
-              break;
-            }
-          }
-
-          if (locationName != 'Current location') break;
-        }
-      }
     } catch (e) {
-      locationName = 'Current location';
-    }
+      if (!mounted) return;
 
-    if (locationName == 'Current location') {
-      if (position.latitude > 41.8 &&
-          position.latitude < 42.2 &&
-          position.longitude > 21.2 &&
-          position.longitude < 21.7) {
-        locationName = 'Skopje';
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not get your current location')),
+      );
+    } finally {
+      if (mounted) {
+        tripProvider.setGettingCurrentLocation(false);
       }
     }
-
-    if (!mounted) return;
-
-    _cityController.text = locationName.trim();
-
-    tripProvider.setSelectedLocation(
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
-
-    tripProvider.setGettingCurrentLocation(false);
-
-    tripProvider.clearLocationSuggestions();
-
-    FocusScope.of(context).unfocus();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Using your current location: $locationName')),
-    );
   }
 
   Future<void> _pickStartDate() async {
@@ -378,6 +374,14 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   ),
                 ),
               ),
+
+              if (tripProvider.showLocationMap &&
+                  tripProvider.selectedLatitude != null &&
+                  tripProvider.selectedLongitude != null) ...[
+                const SizedBox(height: 14),
+                _currentLocationMapCard(tripProvider),
+              ],
+
               const SizedBox(height: 18),
               Row(
                 children: [
@@ -409,7 +413,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(.05),
+                        color: Colors.black.withValues(alpha: .05),
                         blurRadius: 14,
                       ),
                     ],
@@ -575,12 +579,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           Container(
             decoration: BoxDecoration(
               color: isDark
-                  ? const Color(0xFF1E293B).withOpacity(.96)
-                  : Colors.white.withOpacity(.95),
+                  ? const Color(0xFF1E293B).withValues(alpha: .96)
+                  : Colors.white.withValues(alpha: .95),
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: .08),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -591,7 +595,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: tripProvider.locationSuggestions.length,
-              separatorBuilder: (_, __) => Divider(
+              separatorBuilder: (_, _) => Divider(
                 height: 1,
                 color: isDark ? Colors.white12 : Colors.black12,
               ),
@@ -637,6 +641,49 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     );
   }
 
+  Widget _currentLocationMapCard(CreateTripProvider tripProvider) {
+    final latitude = tripProvider.selectedLatitude;
+    final longitude = tripProvider.selectedLongitude;
+
+    if (latitude == null || longitude == null) {
+      return const SizedBox.shrink();
+    }
+
+    final position = LatLng(latitude, longitude);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      height: 260,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: GoogleMap(
+          initialCameraPosition: CameraPosition(target: position, zoom: 15),
+          markers: {
+            Marker(
+              markerId: const MarkerId('current_location'),
+              position: position,
+              infoWindow: const InfoWindow(title: 'Your current location'),
+            ),
+          },
+          myLocationEnabled: true,
+          myLocationButtonEnabled: true,
+          zoomControlsEnabled: true,
+        ),
+      ),
+    );
+  }
+
   Widget _inputCard({required Widget child}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -644,15 +691,17 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF1E293B).withOpacity(.92)
-            : Colors.white.withOpacity(.92),
+            ? const Color(0xFF1E293B).withValues(alpha: .92)
+            : Colors.white.withValues(alpha: .92),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(.08) : Colors.transparent,
+          color: isDark
+              ? Colors.white.withValues(alpha: .08)
+              : Colors.transparent,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: Colors.black.withValues(alpha: .04),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -677,12 +726,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: isDark
-              ? const Color(0xFF1E293B).withOpacity(.92)
-              : Colors.white.withOpacity(.92),
+              ? const Color(0xFF1E293B).withValues(alpha: .92)
+              : Colors.white.withValues(alpha: .92),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.04),
+              color: Colors.black.withValues(alpha: .04),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),

@@ -10,6 +10,8 @@ class CreateTripProvider extends ChangeNotifier {
   bool gettingCurrentLocation = false;
   bool isSearchingLocation = false;
 
+  List<dynamic> locationSuggestions = [];
+
   final Set<String> selectedInterests = {'Museums'};
 
   void setStartDate(DateTime date) {
@@ -52,6 +54,16 @@ class CreateTripProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLocationSuggestions(List<dynamic> suggestions) {
+    locationSuggestions = suggestions;
+    notifyListeners();
+  }
+
+  void clearLocationSuggestions() {
+    locationSuggestions.clear();
+    notifyListeners();
+  }
+
   void toggleInterest(String interest) {
     if (selectedInterests.contains(interest)) {
       if (selectedInterests.length > 1) {
@@ -71,18 +83,18 @@ class CreateTripProvider extends ChangeNotifier {
     selectedLongitude = null;
     gettingCurrentLocation = false;
     isSearchingLocation = false;
+    locationSuggestions.clear();
+
     selectedInterests
       ..clear()
       ..add('Museums');
 
     notifyListeners();
   }
-  List<dynamic> locationSuggestions = [];
+  bool showLocationMap = false;
 
-void setLocationSuggestions(
-  List<dynamic> suggestions,
-) {
-  locationSuggestions = suggestions;
+void setShowLocationMap(bool value) {
+  showLocationMap = value;
   notifyListeners();
 }
 }

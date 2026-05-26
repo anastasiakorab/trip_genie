@@ -16,15 +16,15 @@ class AppInputCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF1E293B).withOpacity(.92)
-            : Colors.white.withOpacity(.92),
+            ? const Color(0xFF1E293B).withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(.08) : Colors.transparent,
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.transparent,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),

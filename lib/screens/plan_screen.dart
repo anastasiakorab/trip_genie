@@ -72,7 +72,10 @@ class _PlanScreenState extends State<PlanScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPlanData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadPlanData();
+    });
   }
 
   @override
@@ -80,7 +83,9 @@ class _PlanScreenState extends State<PlanScreen> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.trip != widget.trip) {
-      _loadPlanData();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadPlanData();
+      });
     }
   }
 

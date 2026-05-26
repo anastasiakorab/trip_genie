@@ -45,8 +45,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final imageBase64 = doc.data()?['profileImageBase64'];
 
     if (imageBase64 != null && imageBase64.toString().isNotEmpty) {
-      if (!context.mounted) return;
 
+      if (!mounted) return;
       Provider.of<ProfileProvider>(
         context,
         listen: false,
@@ -95,6 +95,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context,
         MaterialPageRoute(builder: (_) => const WebCameraScreen()),
       );
+
+      if (!mounted) return;
     } else {
       final picked = await ImagePicker().pickImage(
         source: ImageSource.gallery,
@@ -102,6 +104,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         maxWidth: 300,
         maxHeight: 300,
       );
+      
+      if (!mounted) return;
+
 
       if (picked == null) return;
       bytes = await picked.readAsBytes();
@@ -189,8 +194,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: darkModeEnabled
-            ? Colors.white.withOpacity(0.10)
-            : Colors.white.withOpacity(0.90),
+            ? Colors.white.withValues(alpha: 0.10)
+            : Colors.white.withValues(alpha: 0.90),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
@@ -274,7 +279,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.22),
+                    color: Colors.white.withValues(alpha: 0.22),
                   ),
                   child: ClipOval(
                     child: profileProvider.isUploadingImage
@@ -349,7 +354,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withOpacity(0.55)),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.55)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
@@ -371,8 +376,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: darkModeEnabled
-            ? Colors.white.withOpacity(0.10)
-            : Colors.white.withOpacity(0.92),
+            ? Colors.white.withValues(alpha: 0.10)
+            : Colors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
@@ -438,7 +443,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
       value: value,
       onChanged: onChanged,
-      activeColor: const Color(0xFF6D5DFF),
+      activeThumbColor: const Color(0xFF6D5DFF),
       secondary: _tileIcon(icon),
       title: Text(
         title,
@@ -494,7 +499,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       height: 46,
       decoration: BoxDecoration(
         color: darkModeEnabled
-            ? Colors.white.withOpacity(0.12)
+            ? Colors.white.withValues(alpha: 0.12)
             : const Color(0xFFEDE9FE),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -511,7 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Divider(
         height: 1,
         color: darkModeEnabled
-            ? Colors.white.withOpacity(0.12)
+            ? Colors.white.withValues(alpha: 0.12)
             : Colors.grey.shade300,
       ),
     );
@@ -656,11 +661,11 @@ class _SavedTripsScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isDark
                                 ? const Color(0xFF1E293B)
-                                : Colors.white.withOpacity(.94),
+                                : Colors.white.withValues(alpha: 0.94),
                             borderRadius: BorderRadius.circular(26),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 14,
                                 offset: const Offset(0, 7),
                               ),
@@ -772,7 +777,7 @@ class _SavedTripsScreen extends StatelessWidget {
                                                         place['imageUrl'],
                                                         fit: BoxFit.cover,
                                                         errorBuilder:
-                                                            (_, __, ___) {
+                                                            (_, _, _) {
                                                               return Container(
                                                                 color:
                                                                     const Color(

@@ -33,7 +33,7 @@ class TripStatCard
 
         color: const Color(
           0xFF6D5DFF,
-        ).withOpacity(.12),
+        ).withValues(alpha: 0.12),
       ),
 
       child: Column(
