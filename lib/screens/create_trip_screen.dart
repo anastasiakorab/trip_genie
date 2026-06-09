@@ -34,7 +34,6 @@ class CreateTripScreen extends StatefulWidget {
 
 class _CreateTripScreenState extends State<CreateTripScreen> {
   final _cityController = TextEditingController();
-  final _budgetController = TextEditingController();
   final _cityFocusNode = FocusNode();
 
   Timer? _debounce;
@@ -45,12 +44,18 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     'Nature',
     'Shopping',
     'Nightlife',
+    'Concerts',
+    'Sports',
+    'History',
+    'Art',
+    'Beaches',
+    'Adventure',
+    'Family',
   ];
 
   @override
   void dispose() {
     _cityController.dispose();
-    _budgetController.dispose();
     _cityFocusNode.dispose();
     _debounce?.cancel();
     super.dispose();
@@ -179,7 +184,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         latitude: position.latitude,
         longitude: position.longitude,
       );
-      
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         tripProvider.setShowLocationMap(true);
       });
@@ -256,7 +261,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     );
 
     if (_cityController.text.trim().isEmpty ||
-        _budgetController.text.trim().isEmpty ||
         tripProvider.startDate == null ||
         tripProvider.endDate == null ||
         tripProvider.selectedLatitude == null ||
@@ -273,7 +277,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       city: _cityController.text.trim(),
       startDate: tripProvider.startDate!,
       endDate: tripProvider.endDate!,
-      budget: double.tryParse(_budgetController.text.trim()) ?? 0,
+      budget: tripProvider.budget,
       interests: tripProvider.selectedInterests.toList(),
       latitude: tripProvider.selectedLatitude,
       longitude: tripProvider.selectedLongitude,
@@ -286,6 +290,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   Widget build(BuildContext context) {
     final tripProvider = Provider.of<CreateTripProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isPhone = screenWidth < 600;
+    final horizontalPadding = isPhone ? 16.0 : 20.0;
 
     final duration =
         tripProvider.startDate != null && tripProvider.endDate != null
@@ -312,13 +319,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           ),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(28),
+                padding: EdgeInsets.all(isPhone ? 22 : 28),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(32),
                   gradient: const LinearGradient(
@@ -332,25 +339,32 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     ),
                   ],
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.explore_rounded, color: Colors.white, size: 42),
-                    SizedBox(height: 18),
+                    Icon(
+                      Icons.explore_rounded,
+                      color: Colors.white,
+                      size: isPhone ? 36 : 42,
+                    ),
+                    SizedBox(height: isPhone ? 14 : 18),
                     Text(
                       'Design your next escape ✈️',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 34,
+                        fontSize: isPhone ? 28 : 34,
+                        height: 1.05,
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Text(
                       'Choose where you want to go and let AI organize the details.',
                       style: TextStyle(
                         color: Colors.white70,
-                        fontSize: 15,
+                        fontSize: isPhone ? 14 : 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -383,27 +397,46 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               ],
 
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: _dateCard(
+              if (isPhone)
+                Column(
+                  children: [
+                    _dateCard(
                       title: 'Departure',
                       value: _formatDate(tripProvider.startDate),
                       icon: Icons.flight_takeoff,
                       onTap: _pickStartDate,
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _dateCard(
+                    const SizedBox(height: 12),
+                    _dateCard(
                       title: 'Return',
                       value: _formatDate(tripProvider.endDate),
                       icon: Icons.flight_land,
                       onTap: _pickEndDate,
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: _dateCard(
+                        title: 'Departure',
+                        value: _formatDate(tripProvider.startDate),
+                        icon: Icons.flight_takeoff,
+                        onTap: _pickStartDate,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _dateCard(
+                        title: 'Return',
+                        value: _formatDate(tripProvider.endDate),
+                        icon: Icons.flight_land,
+                        onTap: _pickEndDate,
+                      ),
+                    ),
+                  ],
+                ),
               if (duration != null) ...[
                 const SizedBox(height: 18),
                 Container(
@@ -447,23 +480,76 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ],
               const SizedBox(height: 18),
-              _inputCard(
-                child: TextField(
-                  controller: _budgetController,
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    icon: const Icon(
-                      Icons.attach_money_rounded,
-                      color: Color(0xFF6D5DFF),
+
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E293B).withValues(alpha: .92)
+                      : Colors.white.withValues(alpha: .92),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.euro_rounded,
+                          color: Color(0xFF6D5DFF),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Trip Budget',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF111827),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '€${tripProvider.budget.round()}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            color: Color(0xFF6D5DFF),
+                          ),
+                        ),
+                      ],
                     ),
-                    labelText: 'Trip budget',
-                    hintText: 'Example: 1200',
-                    labelStyle: TextStyle(
-                      color: isDark ? Colors.white70 : Colors.grey,
+                    const SizedBox(height: 12),
+                    Slider(
+                      value: tripProvider.budget,
+                      min: 100,
+                      max: 5000,
+                      divisions: 49,
+                      label: '€${tripProvider.budget.round()}',
+                      onChanged: (value) {
+                        tripProvider.setBudget(value);
+                      },
                     ),
-                  ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '€100',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.grey,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '€5000',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.grey,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 30),
@@ -723,7 +809,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(18),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDark
               ? const Color(0xFF1E293B).withValues(alpha: .92)

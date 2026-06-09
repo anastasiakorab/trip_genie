@@ -41,10 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final error = await AuthService.login(
-      email: email,
-      password: password,
-    );
+    final error = await AuthService.login(email: email, password: password);
 
     if (!mounted) return;
 
@@ -66,9 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error ?? 'Password reset email sent.'),
-      ),
+      SnackBar(content: Text(error ?? 'Password reset email sent.')),
     );
   }
 
@@ -83,10 +78,15 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthFormProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 600;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Colors.transparent,
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isDark
@@ -105,164 +105,187 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 460),
-                padding: const EdgeInsets.all(30),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                  borderRadius: BorderRadius.circular(34),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(
+                  isMobile ? 18 : 24,
+                  isMobile ? 18 : 24,
+                  isMobile ? 18 : 24,
+                  MediaQuery.of(context).viewInsets.bottom + 24,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _logo(),
-                    const SizedBox(height: 24),
-
-                    Text(
-                      'Welcome back',
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : const Color(0xFF111827),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Text(
-                      'Log in to continue planning your trips.',
-                      style: TextStyle(
-                        color: isDark ? Colors.white70 : const Color(0xFF64748B),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    _input(
-                      controller: emailController,
-                      label: 'Email',
-                      icon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      action: TextInputAction.next,
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    _input(
-                      controller: passwordController,
-                      label: 'Password',
-                      icon: Icons.lock_outline,
-                      obscure: authProvider.hidePassword,
-                      action: TextInputAction.done,
-                    ),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: authProvider.isLoading ? null : _forgotPassword,
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                            color: Color(0xFF6D5DFF),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    if (authProvider.errorText != null) ...[
-                      Text(
-                        authProvider.errorText!,
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 25),
-
-                    SizedBox(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight -
+                        (isMobile ? 36 : 48),
+                  ),
+                  child: Center(
+                    child: Container(
                       width: double.infinity,
-                      height: 58,
-                      child: ElevatedButton(
-                        onPressed: authProvider.isLoading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6D5DFF),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      padding: EdgeInsets.all(isMobile ? 22 : 30),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E293B)
+                            : Colors.white,
+                        borderRadius:
+                            BorderRadius.circular(isMobile ? 28 : 34),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
                           ),
-                        ),
-                        child: Text(
-                          authProvider.isLoading ? 'Logging in...' : 'Log In',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _logo(isMobile),
+                          SizedBox(height: isMobile ? 18 : 24),
+                          Text(
+                            'Welcome back',
+                            style: TextStyle(
+                              fontSize: isMobile ? 30 : 34,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF111827),
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Log in to continue planning your trips.',
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF64748B),
+                              fontWeight: FontWeight.w600,
+                              fontSize: isMobile ? 14 : 15,
+                            ),
+                          ),
+                          SizedBox(height: isMobile ? 24 : 30),
+                          _input(
+                            controller: emailController,
+                            label: 'Email',
+                            icon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            action: TextInputAction.next,
+                            isMobile: isMobile,
+                          ),
+                          SizedBox(height: isMobile ? 14 : 18),
+                          _input(
+                            controller: passwordController,
+                            label: 'Password',
+                            icon: Icons.lock_outline,
+                            obscure: authProvider.hidePassword,
+                            action: TextInputAction.done,
+                            isMobile: isMobile,
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: authProvider.isLoading
+                                  ? null
+                                  : _forgotPassword,
+                              child: const Text(
+                                'Forgot password?',
+                                style: TextStyle(
+                                  color: Color(0xFF6D5DFF),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (authProvider.errorText != null) ...[
+                            Text(
+                              authProvider.errorText!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                          SizedBox(height: isMobile ? 20 : 25),
+                          SizedBox(
+                            width: double.infinity,
+                            height: isMobile ? 54 : 58,
+                            child: ElevatedButton(
+                              onPressed:
+                                  authProvider.isLoading ? null : _login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6D5DFF),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                              child: Text(
+                                authProvider.isLoading
+                                    ? 'Logging in...'
+                                    : 'Log In',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: isMobile ? 12 : 16),
+                          Center(
+                            child: TextButton(
+                              onPressed: authProvider.isLoading
+                                  ? null
+                                  : () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const SignupScreen(),
+                                        ),
+                                      );
+                                    },
+                              child: const Text(
+                                "Don't have an account? Sign up",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF6D5DFF),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-
-                    const SizedBox(height: 16),
-
-                    Center(
-                      child: TextButton(
-                        onPressed: authProvider.isLoading
-                            ? null
-                            : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const SignupScreen(),
-                                  ),
-                                );
-                              },
-                        child: const Text(
-                          "Don't have an account? Sign up",
-                          style: TextStyle(
-                            color: Color(0xFF6D5DFF),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _logo() {
+  Widget _logo(bool isMobile) {
     return Container(
-      width: 62,
-      height: 62,
+      width: isMobile ? 56 : 62,
+      height: isMobile ? 56 : 62,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
         ),
         borderRadius: BorderRadius.circular(22),
       ),
-      child: const Icon(
+      child: Icon(
         Icons.flight_takeoff_rounded,
         color: Colors.white,
-        size: 32,
+        size: isMobile ? 29 : 32,
       ),
     );
   }
@@ -274,6 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
     bool obscure = false,
     TextInputType? keyboardType,
     TextInputAction? action,
+    required bool isMobile,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authProvider = Provider.of<AuthFormProvider>(context);
@@ -302,14 +326,16 @@ class _LoginScreenState extends State<LoginScreen> {
         hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
         filled: true,
         fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding: EdgeInsets.symmetric(
           horizontal: 18,
-          vertical: 22,
+          vertical: isMobile ? 18 : 22,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
-            color: isDark ? Colors.white.withOpacity(.08) : Colors.transparent,
+            color: isDark
+                ? Colors.white.withValues(alpha: .08)
+                : Colors.transparent,
           ),
         ),
         focusedBorder: OutlineInputBorder(

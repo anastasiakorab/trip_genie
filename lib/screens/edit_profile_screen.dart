@@ -16,9 +16,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
-  bool isSaving = false;
-  bool hidePassword = true;
-
   @override
   void initState() {
     super.initState();
@@ -102,13 +99,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     final profileProvider = Provider.of<ProfileProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 600;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0F172A)
-          : const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Container(
+          width: double.infinity,
+          height: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDark
@@ -126,105 +125,193 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               end: Alignment.bottomRight,
             ),
           ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(
+                  isMobile ? 16 : 24,
+                  isMobile ? 16 : 24,
+                  isMobile ? 16 : 24,
+                  28,
+                ),
+                child: Column(
+                  children: [
+                    _headerCard(isMobile: isMobile),
+                    SizedBox(height: isMobile ? 18 : 24),
+                    _formCard(
+                      isDark: isDark,
+                      isMobile: isMobile,
+                      profileProvider: profileProvider,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCard({required bool isMobile}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 18 : 22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(isMobile ? 24 : 30),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6D5DFF).withValues(alpha: 0.25),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: isMobile ? 42 : 48,
+            height: isMobile ? 42 : 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+            ),
+          ),
+          SizedBox(width: isMobile ? 12 : 16),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Edit Profile',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
+                Text(
+                  'Edit Profile',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isMobile ? 26 : 30,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 24),
-                _inputCard(
-                  controller: nameController,
-                  label: 'Name',
-                  icon: Icons.person_outline,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: 16),
-                _inputCard(
-                  controller: emailController,
-                  label: 'Email',
-                  icon: Icons.email_outlined,
-                  isDark: isDark,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
-                _inputCard(
-                  controller: passwordController,
-                  label: 'New Password',
-                  icon: Icons.lock_outline,
-                  isDark: isDark,
-                  obscureText: profileProvider.hidePassword,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      hidePassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                    onPressed: () {
-                      profileProvider.togglePasswordVisibility();
-                    },
-                  ),
-                ),
-                const SizedBox(height: 28),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: profileProvider.isSaving ? null : _saveChanges,
-                    icon: profileProvider.isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(
-                      profileProvider.isSaving ? 'Saving...' : 'Save Changes',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D5DFF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Update your account information',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _formCard({
+    required bool isDark,
+    required bool isMobile,
+    required ProfileProvider profileProvider,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 16 : 22),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1E293B).withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(isMobile ? 26 : 30),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.transparent,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _inputCard(
+            controller: nameController,
+            label: 'Name',
+            icon: Icons.person_outline,
+            isDark: isDark,
+          ),
+          const SizedBox(height: 14),
+          _inputCard(
+            controller: emailController,
+            label: 'Email',
+            icon: Icons.email_outlined,
+            isDark: isDark,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 14),
+          _inputCard(
+            controller: passwordController,
+            label: 'New Password',
+            icon: Icons.lock_outline,
+            isDark: isDark,
+            obscureText: profileProvider.hidePassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                profileProvider.hidePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+              onPressed: profileProvider.togglePasswordVisibility,
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: isMobile ? 54 : 56,
+            child: ElevatedButton.icon(
+              onPressed: profileProvider.isSaving ? null : _saveChanges,
+              icon: profileProvider.isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(
+                profileProvider.isSaving ? 'Saving...' : 'Save Changes',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6D5DFF),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFF6D5DFF).withValues(alpha: 0.55),
+                disabledForegroundColor: Colors.white70,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -251,10 +338,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         prefixIcon: Icon(icon),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        fillColor: isDark
+            ? const Color(0xFF0F172A).withValues(alpha: 0.55)
+            : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(
+            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.transparent,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(
+            color: Color(0xFF6D5DFF),
+            width: 1.4,
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/firestore_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geocoding/geocoding.dart';
@@ -36,6 +37,14 @@ class PlaceSuggestion {
   final String category;
   final double? rating;
   final String? imageUrl;
+  final double estimatedCost;
+  final String? priceLevel;
+  final int? userRatingCount;
+  final List<String> types;
+  final String? ticketUrl;
+  final String costSource;
+  final String costGroup;
+  final bool includeInDayTotal;
 
   PlaceSuggestion({
     required this.id,
@@ -44,6 +53,14 @@ class PlaceSuggestion {
     required this.latitude,
     required this.longitude,
     required this.category,
+    required this.estimatedCost,
+    required this.costSource,
+    required this.costGroup,
+    required this.includeInDayTotal,
+    this.priceLevel,
+    this.userRatingCount,
+    this.types = const [],
+    this.ticketUrl,
     this.rating,
     this.imageUrl,
   });
@@ -54,6 +71,34 @@ class DayActivity {
   final PlaceSuggestion place;
 
   DayActivity({required this.timeLabel, required this.place});
+}
+
+class _CostEstimate {
+  final double cost;
+  final String source;
+  final String group;
+  final bool includeInDayTotal;
+  final String? ticketUrl;
+
+  const _CostEstimate({
+    required this.cost,
+    required this.source,
+    required this.group,
+    required this.includeInDayTotal,
+    this.ticketUrl,
+  });
+}
+
+class _TicketmasterEstimate {
+  final double price;
+  final String source;
+  final String? url;
+
+  const _TicketmasterEstimate({
+    required this.price,
+    required this.source,
+    this.url,
+  });
 }
 
 class PlanScreen extends StatefulWidget {
@@ -308,6 +353,20 @@ class _PlanScreenState extends State<PlanScreen> {
         return ['shopping_mall', 'store'];
       case 'Nightlife':
         return ['bar', 'night_club'];
+      case 'Concerts':
+        return ['event_venue', 'performing_arts_theater'];
+      case 'Sports':
+        return ['stadium', 'gym'];
+      case 'History':
+        return ['historical_landmark', 'tourist_attraction'];
+      case 'Art':
+        return ['art_gallery', 'museum'];
+      case 'Beaches':
+        return ['tourist_attraction'];
+      case 'Adventure':
+        return ['amusement_park', 'tourist_attraction'];
+      case 'Family':
+        return ['zoo', 'amusement_park', 'aquarium'];
       default:
         return ['tourist_attraction'];
     }
@@ -317,14 +376,40 @@ class _PlanScreenState extends State<PlanScreen> {
     switch (interest) {
       case 'Museums':
         return 'museums and attractions near $cityName';
+
       case 'Food':
         return 'restaurants near $cityName';
+
       case 'Nature':
         return 'parks and nature attractions near $cityName';
+
       case 'Shopping':
         return 'shopping malls and markets near $cityName';
+
       case 'Nightlife':
         return 'bars and nightlife near $cityName';
+
+      case 'Concerts':
+        return 'concerts and live music venues near $cityName';
+
+      case 'Sports':
+        return 'sports activities and stadiums near $cityName';
+
+      case 'History':
+        return 'historical places and landmarks near $cityName';
+
+      case 'Art':
+        return 'art galleries and creative places near $cityName';
+
+      case 'Beaches':
+        return 'beaches near $cityName';
+
+      case 'Adventure':
+        return 'adventure activities near $cityName';
+
+      case 'Family':
+        return 'family friendly attractions near $cityName';
+
       default:
         return 'tourist attractions near $cityName';
     }
@@ -334,17 +419,497 @@ class _PlanScreenState extends State<PlanScreen> {
     switch (interest) {
       case 'Museums':
         return Icons.museum;
+
       case 'Food':
         return Icons.restaurant;
+
       case 'Nature':
         return Icons.park;
+
       case 'Shopping':
         return Icons.shopping_bag;
+
       case 'Nightlife':
         return Icons.nightlife;
+
+      case 'Concerts':
+        return Icons.music_note;
+
+      case 'Sports':
+        return Icons.sports_soccer;
+
+      case 'History':
+        return Icons.account_balance;
+
+      case 'Art':
+        return Icons.palette;
+
+      case 'Beaches':
+        return Icons.beach_access;
+
+      case 'Adventure':
+        return Icons.hiking;
+
+      case 'Family':
+        return Icons.family_restroom;
+
       default:
         return Icons.place;
     }
+  }
+
+  bool _containsAny(String value, List<String> keywords) {
+    final text = value.toLowerCase();
+    return keywords.any((keyword) => text.contains(keyword.toLowerCase()));
+  }
+
+  bool _hasType(List<String> types, List<String> wantedTypes) {
+    final lowerTypes = types.map((type) => type.toLowerCase()).toSet();
+    return wantedTypes.any((type) => lowerTypes.contains(type.toLowerCase()));
+  }
+
+  double? _costFromGooglePriceLevel(String category, String? priceLevel) {
+    if (priceLevel == null || priceLevel.isEmpty) return null;
+
+    final isNightlife = category == 'Nightlife';
+
+    switch (priceLevel) {
+      case 'PRICE_LEVEL_FREE':
+        return 0;
+      case 'PRICE_LEVEL_INEXPENSIVE':
+        return isNightlife ? 15 : 12;
+      case 'PRICE_LEVEL_MODERATE':
+        return isNightlife ? 30 : 25;
+      case 'PRICE_LEVEL_EXPENSIVE':
+        return isNightlife ? 55 : 45;
+      case 'PRICE_LEVEL_VERY_EXPENSIVE':
+        return isNightlife ? 85 : 70;
+      default:
+        return null;
+    }
+  }
+
+  String _readablePriceLevel(String? priceLevel) {
+    switch (priceLevel) {
+      case 'PRICE_LEVEL_FREE':
+        return 'Free';
+      case 'PRICE_LEVEL_INEXPENSIVE':
+        return 'Inexpensive';
+      case 'PRICE_LEVEL_MODERATE':
+        return 'Moderate';
+      case 'PRICE_LEVEL_EXPENSIVE':
+        return 'Expensive';
+      case 'PRICE_LEVEL_VERY_EXPENSIVE':
+        return 'Very expensive';
+      default:
+        return 'Not available';
+    }
+  }
+
+  String _costGroupForCategory(String category) {
+    switch (category) {
+      case 'Food':
+      case 'Nightlife':
+        return 'Food & drinks';
+      case 'Museums':
+      case 'History':
+      case 'Art':
+      case 'Concerts':
+      case 'Sports':
+      case 'Adventure':
+      case 'Family':
+        return 'Tickets & attractions';
+      case 'Nature':
+      case 'Beaches':
+        return 'Outdoor / free places';
+      case 'Shopping':
+        return 'Optional shopping allowance';
+      default:
+        return 'Other estimates';
+    }
+  }
+
+  double _popularityBoost(double? rating, int? userRatingCount) {
+    final reviews = userRatingCount ?? 0;
+    final placeRating = rating ?? 0;
+
+    if (placeRating >= 4.7 && reviews >= 5000) return 10;
+    if (placeRating >= 4.5 && reviews >= 1500) return 7;
+    if (placeRating >= 4.3 && reviews >= 500) return 4;
+    if (placeRating > 0 && placeRating < 4.0) return -3;
+    return 0;
+  }
+
+  double _budgetAdjustment(double dailyBudget) {
+    if (dailyBudget < 80) return -4;
+    if (dailyBudget >= 200) return 6;
+    return 0;
+  }
+
+  double _clampCost(double value, double min, double max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+  }
+
+  bool _looksLikePaidOutdoorPlace({
+    required String name,
+    required List<String> types,
+  }) {
+    return _containsAny(name, [
+          'beach club',
+          'private beach',
+          'lido',
+          'resort',
+          'water park',
+          'aquapark',
+          'aqua park',
+          'botanical garden',
+          'national park',
+          'theme park',
+          'amusement park',
+        ]) ||
+        _hasType(types, ['amusement_park', 'water_park', 'national_park']);
+  }
+
+  double _estimateCulturalTicket({
+    required String category,
+    required String name,
+    required double dailyBudget,
+    required double? rating,
+    required int? userRatingCount,
+    required List<String> types,
+  }) {
+    double base;
+
+    if (_containsAny(name, ['palace', 'castle', 'tower', 'cathedral'])) {
+      base = 20;
+    } else if (_hasType(types, ['museum'])) {
+      base = 18;
+    } else if (_hasType(types, ['art_gallery'])) {
+      base = 14;
+    } else if (_hasType(types, ['historical_landmark'])) {
+      base = 15;
+    } else {
+      switch (category) {
+        case 'Museums':
+          base = 18;
+          break;
+        case 'Art':
+          base = 14;
+          break;
+        case 'History':
+          base = 15;
+          break;
+        default:
+          base = 16;
+      }
+    }
+
+    final estimate =
+        base +
+        _popularityBoost(rating, userRatingCount) +
+        _budgetAdjustment(dailyBudget);
+
+    return _clampCost(estimate, 6, 38).roundToDouble();
+  }
+
+  double _estimateActivityTicket({
+    required String category,
+    required String name,
+    required double dailyBudget,
+    required double? rating,
+    required int? userRatingCount,
+    required List<String> types,
+  }) {
+    double base;
+
+    if (_containsAny(name, ['disney', 'theme park', 'amusement park']) ||
+        _hasType(types, ['amusement_park'])) {
+      base = 65;
+    } else if (_containsAny(name, ['aquarium', 'zoo']) ||
+        _hasType(types, ['aquarium', 'zoo'])) {
+      base = 28;
+    } else if (_containsAny(name, ['stadium', 'arena'])) {
+      base = 25;
+    } else if (_containsAny(name, [
+      'tour',
+      'climbing',
+      'escape',
+      'adventure',
+    ])) {
+      base = 35;
+    } else {
+      switch (category) {
+        case 'Family':
+          base = 25;
+          break;
+        case 'Sports':
+          base = 25;
+          break;
+        case 'Adventure':
+          base = 35;
+          break;
+        default:
+          base = 25;
+      }
+    }
+
+    final estimate =
+        base +
+        (_popularityBoost(rating, userRatingCount) / 2) +
+        _budgetAdjustment(dailyBudget);
+
+    return _clampCost(estimate, 8, 95).roundToDouble();
+  }
+
+  Future<_TicketmasterEstimate?> _ticketmasterEstimate({
+    required String category,
+    required String placeName,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final apiKey = dotenv.env['TICKETMASTER_API_KEY'] ?? '';
+    if (apiKey.isEmpty) return null;
+
+    final classification = category == 'Concerts' ? 'music' : 'sports';
+
+    final uri = Uri.https('app.ticketmaster.com', '/discovery/v2/events.json', {
+      'apikey': apiKey,
+      'keyword': placeName,
+      'latlong':
+          '${latitude.toStringAsFixed(5)},${longitude.toStringAsFixed(5)}',
+      'radius': '30',
+      'unit': 'km',
+      'size': '10',
+      'classificationName': classification,
+      'sort': 'relevance,desc',
+    });
+
+    try {
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final events =
+          data['_embedded']?['events'] as List<dynamic>? ?? <dynamic>[];
+
+      for (final event in events) {
+        final priceRanges = event['priceRanges'] as List<dynamic>? ?? [];
+        final eventUrl = event['url']?.toString();
+
+        for (final range in priceRanges) {
+          final currency = range['currency']?.toString();
+          final minPrice = (range['min'] as num?)?.toDouble();
+
+          if (minPrice != null && currency == 'EUR') {
+            return _TicketmasterEstimate(
+              price: minPrice,
+              source:
+                  'Ticketmaster event price range: from €${minPrice.round()}',
+              url: eventUrl,
+            );
+          }
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
+  }
+
+  Future<_CostEstimate> _estimateCostForPlace({
+    required String category,
+    required String name,
+    required double dailyBudget,
+    required String? priceLevel,
+    required double? rating,
+    required int? userRatingCount,
+    required List<String> types,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final googlePrice = _costFromGooglePriceLevel(category, priceLevel);
+
+    if ((category == 'Food' || category == 'Nightlife') &&
+        googlePrice != null) {
+      return _CostEstimate(
+        cost: googlePrice,
+        source: 'Google Places price level: ${_readablePriceLevel(priceLevel)}',
+        group: 'Food & drinks',
+        includeInDayTotal: true,
+      );
+    }
+
+    switch (category) {
+      case 'Food':
+        return _CostEstimate(
+          cost: dailyBudget < 80
+              ? 15
+              : dailyBudget < 200
+              ? 30
+              : 55,
+          source: 'Fallback restaurant estimate based on selected budget style',
+          group: 'Food & drinks',
+          includeInDayTotal: true,
+        );
+
+      case 'Nightlife':
+        return _CostEstimate(
+          cost: dailyBudget < 80
+              ? 18
+              : dailyBudget < 200
+              ? 35
+              : 70,
+          source:
+              'Fallback bar/nightlife estimate based on selected budget style',
+          group: 'Food & drinks',
+          includeInDayTotal: true,
+        );
+
+      case 'Nature':
+      case 'Beaches':
+        if (_looksLikePaidOutdoorPlace(name: name, types: types)) {
+          final cost =
+              _containsAny(name, ['water park', 'aquapark', 'amusement'])
+              ? 35.0
+              : 12.0;
+          return _CostEstimate(
+            cost: cost,
+            source: 'Paid outdoor venue estimate based on place type/name',
+            group: 'Tickets & attractions',
+            includeInDayTotal: true,
+          );
+        }
+
+        return _CostEstimate(
+          cost: 0,
+          source: category == 'Beaches'
+              ? 'Free public beach / outdoor place estimate'
+              : 'Free public park / outdoor place estimate',
+          group: 'Outdoor / free places',
+          includeInDayTotal: true,
+        );
+
+      case 'Shopping':
+        return _CostEstimate(
+          cost: dailyBudget < 80
+              ? 20
+              : dailyBudget < 200
+              ? 45
+              : 90,
+          source:
+              'Optional personal shopping allowance; not included in daily total',
+          group: 'Optional shopping allowance',
+          includeInDayTotal: false,
+        );
+
+      case 'Museums':
+      case 'Art':
+      case 'History':
+        final cost = _estimateCulturalTicket(
+          category: category,
+          name: name,
+          dailyBudget: dailyBudget,
+          rating: rating,
+          userRatingCount: userRatingCount,
+          types: types,
+        );
+
+        return _CostEstimate(
+          cost: cost,
+          source:
+              'Google Places rating/review popularity + attraction-type ticket estimate',
+          group: 'Tickets & attractions',
+          includeInDayTotal: true,
+        );
+
+      case 'Concerts':
+      case 'Sports':
+        final ticketmaster = await _ticketmasterEstimate(
+          category: category,
+          placeName: name,
+          latitude: latitude,
+          longitude: longitude,
+        );
+
+        if (ticketmaster != null) {
+          return _CostEstimate(
+            cost: ticketmaster.price,
+            source: ticketmaster.source,
+            group: 'Tickets & attractions',
+            includeInDayTotal: true,
+            ticketUrl: ticketmaster.url,
+          );
+        }
+
+        final double fallbackCost = category == 'Concerts'
+            ? (dailyBudget < 80
+                  ? 30.0
+                  : dailyBudget < 200
+                  ? 55.0
+                  : 110.0)
+            : _estimateActivityTicket(
+                category: category,
+                name: name,
+                dailyBudget: dailyBudget,
+                rating: rating,
+                userRatingCount: userRatingCount,
+                types: types,
+              );
+
+        return _CostEstimate(
+          cost: fallbackCost,
+          source: category == 'Concerts'
+              ? 'Ticketmaster not configured/no EUR price found; event ticket fallback estimate'
+              : 'Ticketmaster not configured/no EUR price found; sports venue/activity estimate',
+          group: 'Tickets & attractions',
+          includeInDayTotal: true,
+        );
+
+      case 'Adventure':
+      case 'Family':
+        final cost = _estimateActivityTicket(
+          category: category,
+          name: name,
+          dailyBudget: dailyBudget,
+          rating: rating,
+          userRatingCount: userRatingCount,
+          types: types,
+        );
+
+        return _CostEstimate(
+          cost: cost,
+          source:
+              'Place type + popularity estimate for paid attraction/activity',
+          group: 'Tickets & attractions',
+          includeInDayTotal: true,
+        );
+
+      default:
+        return _CostEstimate(
+          cost: dailyBudget < 80
+              ? 10
+              : dailyBudget < 200
+              ? 25
+              : 50,
+          source: 'Category-based fallback estimate',
+          group: 'Other estimates',
+          includeInDayTotal: true,
+        );
+    }
+  }
+
+  Map<String, double> _dayCostBreakdown(List<DayActivity> activities) {
+    final breakdown = <String, double>{};
+
+    for (final activity in activities) {
+      final group = activity.place.costGroup;
+      breakdown[group] = (breakdown[group] ?? 0) + activity.place.estimatedCost;
+    }
+
+    return breakdown;
   }
 
   Future<void> _loadGooglePlaces() async {
@@ -410,16 +975,44 @@ class _PlanScreenState extends State<PlanScreen> {
           break;
         }
       }
+      final placeName = displayName?['text']?.toString() ?? 'Place to visit';
+      final priceLevel = place['priceLevel']?.toString();
+      final rating = (place['rating'] as num?)?.toDouble();
+      final userRatingCount = (place['userRatingCount'] as num?)?.toInt();
+      final types = (place['types'] as List<dynamic>? ?? [])
+          .map((type) => type.toString())
+          .toList();
+      final dailyBudget = trip.budget / trip.days;
+
+      final costEstimate = await _estimateCostForPlace(
+        category: interest,
+        name: placeName,
+        dailyBudget: dailyBudget,
+        priceLevel: priceLevel,
+        rating: rating,
+        userRatingCount: userRatingCount,
+        types: types,
+        latitude: placeLat,
+        longitude: placeLng,
+      );
 
       loadedPlaces.add(
         PlaceSuggestion(
           id: id,
-          name: displayName?['text'] ?? 'Place to visit',
+          name: placeName,
           address: place['formattedAddress'] ?? '',
           latitude: placeLat,
           longitude: placeLng,
           category: interest,
-          rating: (place['rating'] as num?)?.toDouble(),
+          estimatedCost: costEstimate.cost,
+          costSource: costEstimate.source,
+          costGroup: costEstimate.group,
+          includeInDayTotal: costEstimate.includeInDayTotal,
+          priceLevel: priceLevel,
+          userRatingCount: userRatingCount,
+          types: types,
+          ticketUrl: costEstimate.ticketUrl,
+          rating: rating,
           imageUrl: imageUrl,
         ),
       );
@@ -457,7 +1050,7 @@ class _PlanScreenState extends State<PlanScreen> {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': googleApiKey,
               'X-Goog-FieldMask':
-                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos',
+                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types,places.photos,places.priceLevel',
             },
             body: jsonEncode(body),
           );
@@ -504,7 +1097,7 @@ class _PlanScreenState extends State<PlanScreen> {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': googleApiKey,
               'X-Goog-FieldMask':
-                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos',
+                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types,places.photos,places.priceLevel',
             },
             body: jsonEncode(body),
           );
@@ -745,6 +1338,14 @@ class _PlanScreenState extends State<PlanScreen> {
           'placeName': activity.place.name,
           'address': activity.place.address,
           'category': activity.place.category,
+          'estimatedCost': activity.place.estimatedCost,
+          'costSource': activity.place.costSource,
+          'costGroup': activity.place.costGroup,
+          'includeInDayTotal': activity.place.includeInDayTotal,
+          'priceLevel': activity.place.priceLevel,
+          'userRatingCount': activity.place.userRatingCount,
+          'types': activity.place.types,
+          'ticketUrl': activity.place.ticketUrl,
 
           'latitude': activity.place.latitude,
           'longitude': activity.place.longitude,
@@ -830,13 +1431,6 @@ class _PlanScreenState extends State<PlanScreen> {
     }
   }
 
-  String _estimatedDayCost(double dailyBudget) {
-    final min = (dailyBudget * 0.8).round();
-    final max = (dailyBudget * 1.2).round();
-
-    return '\$$min - \$$max';
-  }
-
   String _weatherIcon(int code) {
     if (code == 0) return '☀️';
     if (code == 1 || code == 2 || code == 3) return '⛅';
@@ -852,6 +1446,7 @@ class _PlanScreenState extends State<PlanScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = MediaQuery.of(context).size.width < 430;
     final planProvider = Provider.of<PlanProvider>(context);
     final places = planProvider.places.cast<PlaceSuggestion>();
     final weatherDays = planProvider.weatherDays.cast<WeatherDay>();
@@ -911,7 +1506,12 @@ class _PlanScreenState extends State<PlanScreen> {
           ),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 14 : 20,
+            16,
+            isMobile ? 14 : 20,
+            28,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -922,7 +1522,7 @@ class _PlanScreenState extends State<PlanScreen> {
               Text(
                 'Your daily trip plan',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: isMobile ? 21 : 24,
                   fontWeight: FontWeight.w900,
                   color: isDark ? Colors.white : const Color(0xFF111827),
                 ),
@@ -933,7 +1533,7 @@ class _PlanScreenState extends State<PlanScreen> {
               Text(
                 'Each day is organized into morning, lunch, afternoon and evening activities.',
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: isMobile ? 13 : 15,
                   color: isDark ? Colors.white70 : const Color(0xFF64748B),
                   fontWeight: FontWeight.w600,
                 ),
@@ -989,12 +1589,13 @@ class _PlanScreenState extends State<PlanScreen> {
     List<PlaceSuggestion> places,
   ) {
     final cityName = _displayCityName(trip, places);
+    final isMobile = MediaQuery.of(context).size.width < 430;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(26),
+      padding: EdgeInsets.all(isMobile ? 18 : 26),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(isMobile ? 26 : 34),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -1002,7 +1603,7 @@ class _PlanScreenState extends State<PlanScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6D5DFF).withOpacity(0.35),
+            color: const Color(0xFF6D5DFF).withValues(alpha: 0.35),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
@@ -1014,16 +1615,16 @@ class _PlanScreenState extends State<PlanScreen> {
           Row(
             children: [
               Container(
-                width: 58,
-                height: 58,
+                width: isMobile ? 48 : 58,
+                height: isMobile ? 48 : 58,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.flight_takeoff_rounded,
                   color: Colors.white,
-                  size: 31,
+                  size: isMobile ? 25 : 31,
                 ),
               ),
               const SizedBox(width: 16),
@@ -1033,9 +1634,11 @@ class _PlanScreenState extends State<PlanScreen> {
                   children: [
                     Text(
                       'Trip to $cityName',
-                      style: const TextStyle(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 30,
+                        fontSize: isMobile ? 23 : 30,
                         fontWeight: FontWeight.w900,
                         height: 1.1,
                       ),
@@ -1055,36 +1658,49 @@ class _PlanScreenState extends State<PlanScreen> {
             ],
           ),
 
-          const SizedBox(height: 28),
+          SizedBox(height: isMobile ? 20 : 28),
 
-          Row(
-            children: [
-              Expanded(
-                child: _heroInfo(
-                  icon: Icons.calendar_month,
-                  title: 'Duration',
-                  value: '${trip.days} Days',
+          if (isMobile) ...[
+            _heroInfo(
+              icon: Icons.calendar_month,
+              title: 'Duration',
+              value: '${trip.days} Days',
+            ),
+            const SizedBox(height: 12),
+            _heroInfo(
+              icon: Icons.favorite,
+              title: 'Interests',
+              value: trip.interests.join(' • '),
+            ),
+          ] else
+            Row(
+              children: [
+                Expanded(
+                  child: _heroInfo(
+                    icon: Icons.calendar_month,
+                    title: 'Duration',
+                    value: '${trip.days} Days',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _heroInfo(
-                  icon: Icons.favorite,
-                  title: 'Interests',
-                  value: trip.interests.join(' • '),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _heroInfo(
+                    icon: Icons.favorite,
+                    title: 'Interests',
+                    value: trip.interests.join(' • '),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
 
           const SizedBox(height: 14),
 
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: _budgetColor(dailyBudget).withOpacity(0.22),
+              color: _budgetColor(dailyBudget).withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
@@ -1109,9 +1725,9 @@ class _PlanScreenState extends State<PlanScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+              color: Colors.white.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
@@ -1119,7 +1735,7 @@ class _PlanScreenState extends State<PlanScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '\$${trip.budget.toStringAsFixed(0)} Budget • ${_estimatedDayCost(dailyBudget)} / day',
+                    '€${trip.budget.toStringAsFixed(0)} Budget • €${dailyBudget.round()} planned per day',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -1169,9 +1785,9 @@ class _PlanScreenState extends State<PlanScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
+        color: Colors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1209,16 +1825,23 @@ class _PlanScreenState extends State<PlanScreen> {
     required double dailyBudget,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = MediaQuery.of(context).size.width < 430;
+    final dayTotal = activities.fold<double>(
+      0,
+      (sum, activity) => activity.place.includeInDayTotal
+          ? sum + activity.place.estimatedCost
+          : sum,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(isMobile ? 14 : 18),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(isMobile ? 22 : 28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 8),
           ),
@@ -1228,13 +1851,14 @@ class _PlanScreenState extends State<PlanScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: isMobile ? 40 : 46,
+                height: isMobile ? 40 : 46,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withOpacity(0.12)
+                      ? Colors.white.withValues(alpha: 0.12)
                       : const Color(0xFFE0E7FF),
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -1256,7 +1880,7 @@ class _PlanScreenState extends State<PlanScreen> {
                     Text(
                       'Day $dayNumber',
                       style: TextStyle(
-                        fontSize: 19,
+                        fontSize: isMobile ? 17 : 19,
                         fontWeight: FontWeight.w900,
                         color: isDark ? Colors.white : const Color(0xFF111827),
                       ),
@@ -1273,7 +1897,7 @@ class _PlanScreenState extends State<PlanScreen> {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      'Estimated daily cost: ${_estimatedDayCost(dailyBudget)}',
+                      'Estimated daily cost: €${dayTotal.round()}',
                       style: const TextStyle(
                         color: Color(0xFF8B5CF6),
                         fontWeight: FontWeight.w900,
@@ -1284,12 +1908,12 @@ class _PlanScreenState extends State<PlanScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 9 : 12,
+                  vertical: isMobile ? 6 : 8,
                 ),
                 decoration: BoxDecoration(
-                  color: _budgetColor(dailyBudget).withOpacity(0.16),
+                  color: _budgetColor(dailyBudget).withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Text(
@@ -1297,11 +1921,16 @@ class _PlanScreenState extends State<PlanScreen> {
                   style: TextStyle(
                     color: _budgetColor(dailyBudget),
                     fontWeight: FontWeight.w900,
-                    fontSize: 12,
+                    fontSize: isMobile ? 10 : 12,
                   ),
                 ),
               ),
             ],
+          ),
+          _costSummaryCard(
+            breakdown: _dayCostBreakdown(activities),
+            total: dayTotal,
+            isDark: isDark,
           ),
           const SizedBox(height: 16),
           if (activities.isEmpty)
@@ -1323,19 +1952,152 @@ class _PlanScreenState extends State<PlanScreen> {
     );
   }
 
+  Widget _costSummaryCard({
+    required Map<String, double> breakdown,
+    required double total,
+    required bool isDark,
+  }) {
+    final isMobile = MediaQuery.of(context).size.width < 430;
+    final entries = breakdown.entries.toList()
+      ..sort((a, b) {
+        if (a.value == b.value) return a.key.compareTo(b.key);
+        return b.value.compareTo(a.value);
+      });
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 14),
+      padding: EdgeInsets.all(isMobile ? 12 : 14),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : const Color(0xFFF5F3FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.12)
+              : const Color(0xFFDDD6FE),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.receipt_long_outlined,
+                color: Color(0xFF8B5CF6),
+                size: 19,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Cost summary',
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF111827),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (entries.isEmpty)
+            Text(
+              'No activities with cost data found for this day.',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            )
+          else
+            Column(
+              children: entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          style: TextStyle(
+                            color: isDark
+                                ? Colors.white70
+                                : const Color(0xFF64748B),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '€${entry.value.round()}',
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF111827),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          const Divider(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Daily total',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                '€${total.round()}',
+                style: const TextStyle(
+                  color: Color(0xFF8B5CF6),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Daily total includes activities, attractions and food. Shopping is optional and not included.',
+            style: TextStyle(
+              color: isDark ? Colors.white60 : const Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+              fontSize: isMobile ? 10.5 : 11,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _placeMiniCard(PlaceSuggestion place, String timeLabel) {
     final favoritesProvider = Provider.of<FavoritesProvider>(context);
     final isFavorite = favoritesProvider.isFavorite(place.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = MediaQuery.of(context).size.width < 430;
+    final costLabel = place.category == 'Shopping'
+        ? 'Optional shopping budget'
+        : 'Estimated cost';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      height: 260,
+      height: isMobile ? 340 : 300,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.18 : 0.08),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.08),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -1364,8 +2126,8 @@ class _PlanScreenState extends State<PlanScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(isDark ? 0.18 : 0.10),
-                      Colors.black.withOpacity(isDark ? 0.82 : 0.72),
+                      Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
+                      Colors.black.withValues(alpha: isDark ? 0.82 : 0.72),
                     ],
                   ),
                 ),
@@ -1382,9 +2144,11 @@ class _PlanScreenState extends State<PlanScreen> {
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(isDark ? 0.55 : 0.38),
+                    color: Colors.black.withValues(alpha: isDark ? 0.55 : 0.38),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.30)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.30),
+                    ),
                   ),
                   child: Icon(
                     isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -1395,9 +2159,9 @@ class _PlanScreenState extends State<PlanScreen> {
             ),
 
             Positioned(
-              left: 18,
-              right: 18,
-              bottom: 18,
+              left: isMobile ? 14 : 18,
+              right: isMobile ? 14 : 18,
+              bottom: isMobile ? 14 : 18,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1407,9 +2171,13 @@ class _PlanScreenState extends State<PlanScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(isDark ? 0.22 : 0.18),
+                      color: Colors.white.withValues(
+                        alpha: isDark ? 0.22 : 0.18,
+                      ),
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.white.withOpacity(0.25)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
                     ),
                     child: Text(
                       timeLabel,
@@ -1427,9 +2195,9 @@ class _PlanScreenState extends State<PlanScreen> {
                     place.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 22,
+                      fontSize: isMobile ? 19 : 22,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -1469,6 +2237,62 @@ class _PlanScreenState extends State<PlanScreen> {
                     ],
                   ),
 
+                  const SizedBox(height: 8),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Text(
+                      '$costLabel: €${place.estimatedCost.round()}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    'Source: ${place.costSource}',
+                    maxLines: isMobile ? 3 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                  if (place.priceLevel != null)
+                    Text(
+                      'Google price level: ${_readablePriceLevel(place.priceLevel!)}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+
+                  if (place.userRatingCount != null)
+                    Text(
+                      'Based on ${place.userRatingCount} reviews',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+
                   const SizedBox(height: 6),
 
                   Text(
@@ -1486,15 +2310,17 @@ class _PlanScreenState extends State<PlanScreen> {
                   OutlinedButton.icon(
                     onPressed: () => _openInMaps(place),
                     icon: const Icon(Icons.map_outlined, size: 18),
-                    label: const Text(
-                      'Open in Maps',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                    label: Text(
+                      isMobile ? 'Maps' : 'Open in Maps',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
-                      side: BorderSide(color: Colors.white.withOpacity(0.65)),
-                      backgroundColor: Colors.white.withOpacity(
-                        isDark ? 0.18 : 0.12,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.65),
+                      ),
+                      backgroundColor: Colors.white.withValues(
+                        alpha: isDark ? 0.18 : 0.12,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),

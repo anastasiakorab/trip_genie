@@ -83,6 +83,7 @@ class CreateTripProvider extends ChangeNotifier {
     selectedLongitude = null;
     gettingCurrentLocation = false;
     isSearchingLocation = false;
+    budget = 500;
     locationSuggestions.clear();
 
     selectedInterests
@@ -95,6 +96,12 @@ class CreateTripProvider extends ChangeNotifier {
 
 void setShowLocationMap(bool value) {
   showLocationMap = value;
+  notifyListeners();
+}
+double budget = 500;
+
+void setBudget(double value) {
+  budget = value;
   notifyListeners();
 }
 }

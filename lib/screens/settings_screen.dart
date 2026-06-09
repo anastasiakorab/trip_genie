@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'edit_profile_screen.dart';
-import 'web_camera_screen.dart';
 import 'favorites_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state_provider.dart';
@@ -45,7 +44,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final imageBase64 = doc.data()?['profileImageBase64'];
 
     if (imageBase64 != null && imageBase64.toString().isNotEmpty) {
-
       if (!mounted) return;
       Provider.of<ProfileProvider>(
         context,
@@ -54,79 +52,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+ Future<void> _pickImage() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
 
-    final source = await showModalBottomSheet<String>(
-      context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Take Photo'),
-                subtitle: const Text('Open webcam in Chrome'),
-                onTap: () {
-                  Navigator.pop(context, 'camera');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Choose from Gallery'),
-                onTap: () {
-                  Navigator.pop(context, 'gallery');
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (source == null) return;
-
-    Uint8List? bytes;
-
-    if (source == 'camera') {
-      bytes = await Navigator.push<Uint8List>(
-        context,
-        MaterialPageRoute(builder: (_) => const WebCameraScreen()),
+  final source = await showModalBottomSheet<String>(
+    context: context,
+    builder: (_) {
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              subtitle: const Text('Open phone camera'),
+              onTap: () {
+                Navigator.pop(context, 'camera');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context, 'gallery');
+              },
+            ),
+          ],
+        ),
       );
+    },
+  );
 
-      if (!mounted) return;
-    } else {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 45,
-        maxWidth: 300,
-        maxHeight: 300,
-      );
-      
-      if (!mounted) return;
+  if (source == null) return;
 
+  final picked = await ImagePicker().pickImage(
+    source: source == 'camera'
+        ? ImageSource.camera
+        : ImageSource.gallery,
+    imageQuality: 45,
+    maxWidth: 300,
+    maxHeight: 300,
+  );
 
-      if (picked == null) return;
-      bytes = await picked.readAsBytes();
-    }
+  if (!mounted) return;
+  if (picked == null) return;
 
-    if (bytes == null) return;
+  final bytes = await picked.readAsBytes();
 
-    final base64Image = base64Encode(bytes);
+  final base64Image = base64Encode(bytes);
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-      'profileImageBase64': base64Image,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .set({
+    'profileImageBase64': base64Image,
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
 
-    Provider.of<ProfileProvider>(context, listen: false).setProfileImage(bytes);
+  if (!mounted) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
-  }
+  Provider.of<ProfileProvider>(
+    context,
+    listen: false,
+  ).setProfileImage(bytes);
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Profile photo updated'),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +161,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          padding: EdgeInsets.fromLTRB(
+            MediaQuery.of(context).size.width < 400 ? 16 : 24,
+            24,
+            MediaQuery.of(context).size.width < 400 ? 16 : 24,
+            24,
+          ),
           child: Column(
             children: [
               _settingsHeader(),
@@ -191,7 +192,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _settingsHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.all(
+        MediaQuery.of(context).size.width < 400 ? 18 : 22,
+      ),
       decoration: BoxDecoration(
         color: darkModeEnabled
             ? Colors.white.withValues(alpha: 0.10)
@@ -201,8 +204,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Row(
         children: [
           Container(
-            width: 58,
-            height: 58,
+            width: MediaQuery.of(context).size.width < 400 ? 50 : 58,
+            height: MediaQuery.of(context).size.width < 400 ? 50 : 58,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF6D5DFF), Color(0xFFEC4899)],
@@ -223,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   'Settings ⚙️',
                   style: TextStyle(
-                    fontSize: 34,
+                    fontSize: MediaQuery.of(context).size.width < 400 ? 26 : 34,
                     fontWeight: FontWeight.w900,
                     color: darkModeEnabled
                         ? Colors.white
@@ -261,7 +264,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(26),
+      padding: EdgeInsets.all(
+        MediaQuery.of(context).size.width < 400 ? 18 : 26,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
         gradient: const LinearGradient(
@@ -322,15 +327,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           Text(
             name,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 26,
+              fontSize: MediaQuery.of(context).size.width < 400 ? 22 : 26,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             email,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white70,
               fontWeight: FontWeight.w600,
@@ -368,8 +376,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _settingsCard() {
     final appState = Provider.of<AppStateProvider>(context, listen: false);
-    final profileProvider =
-    Provider.of<ProfileProvider>(context);
+    final profileProvider = Provider.of<ProfileProvider>(context);
 
     return Container(
       width: double.infinity,
@@ -440,7 +447,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required Function(bool) onChanged,
   }) {
     return SwitchListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.of(context).size.width < 400 ? 14 : 22,
+        vertical: 6,
+      ),
       value: value,
       onChanged: onChanged,
       activeThumbColor: const Color(0xFF6D5DFF),
@@ -470,7 +480,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.of(context).size.width < 400 ? 14 : 22,
+        vertical: 8,
+      ),
       leading: _tileIcon(icon),
       title: Text(
         title,
@@ -495,8 +508,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _tileIcon(IconData icon) {
     return Container(
-      width: 46,
-      height: 46,
+      width: MediaQuery.of(context).size.width < 400 ? 40 : 46,
+      height: MediaQuery.of(context).size.width < 400 ? 40 : 46,
       decoration: BoxDecoration(
         color: darkModeEnabled
             ? Colors.white.withValues(alpha: 0.12)
@@ -618,7 +631,12 @@ class _SavedTripsScreen extends StatelessWidget {
               final trips = snapshot.data!.docs;
 
               return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                padding: EdgeInsets.fromLTRB(
+                  MediaQuery.of(context).size.width < 400 ? 16 : 24,
+                  24,
+                  MediaQuery.of(context).size.width < 400 ? 16 : 24,
+                  24,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -627,6 +645,7 @@ class _SavedTripsScreen extends StatelessWidget {
 
                     ...trips.map((doc) {
                       final data = doc.data();
+                      final tripId = doc.id;
 
                       final city = data['city'] ?? 'Unknown city';
                       final budget = data['budget'] ?? 0;
@@ -722,14 +741,78 @@ class _SavedTripsScreen extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                  Text(
-                                    '\$$budget',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      color: isDark
-                                          ? Colors.white
-                                          : const Color(0xFF111827),
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '€$budget',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF111827),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () async {
+                                          final shouldDelete =
+                                              await showDialog<bool>(
+                                                context: context,
+                                                builder: (_) => AlertDialog(
+                                                  title: const Text(
+                                                    'Delete Trip',
+                                                  ),
+                                                  content: const Text(
+                                                    'Are you sure you want to delete this trip?',
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            context,
+                                                            false,
+                                                          ),
+                                                      child: const Text(
+                                                        'Cancel',
+                                                      ),
+                                                    ),
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            context,
+                                                            true,
+                                                          ),
+                                                      child: const Text(
+                                                        'Delete',
+                                                        style: TextStyle(
+                                                          color: Colors.red,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+
+                                          if (shouldDelete == true) {
+                                            await FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(
+                                                  FirebaseAuth
+                                                      .instance
+                                                      .currentUser!
+                                                      .uid,
+                                                )
+                                                .collection('savedTrips')
+                                                .doc(tripId)
+                                                .delete();
+                                          }
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -776,20 +859,18 @@ class _SavedTripsScreen extends StatelessWidget {
                                                     ? Image.network(
                                                         place['imageUrl'],
                                                         fit: BoxFit.cover,
-                                                        errorBuilder:
-                                                            (_, _, _) {
-                                                              return Container(
-                                                                color:
-                                                                    const Color(
-                                                                      0xFF6D5DFF,
-                                                                    ),
-                                                                child: const Icon(
-                                                                  Icons.place,
-                                                                  color: Colors
-                                                                      .white,
-                                                                ),
-                                                              );
-                                                            },
+                                                        errorBuilder: (_, _, _) {
+                                                          return Container(
+                                                            color: const Color(
+                                                              0xFF6D5DFF,
+                                                            ),
+                                                            child: const Icon(
+                                                              Icons.place,
+                                                              color:
+                                                                  Colors.white,
+                                                            ),
+                                                          );
+                                                        },
                                                       )
                                                     : Container(
                                                         color: const Color(
@@ -883,7 +964,9 @@ class _SavedTripsScreen extends StatelessWidget {
   Widget _savedTripsHeader(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.all(
+        MediaQuery.of(context).size.width < 400 ? 16 : 22,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: const LinearGradient(
@@ -897,12 +980,12 @@ class _SavedTripsScreen extends StatelessWidget {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
               'Saved Trips',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 30,
+                fontSize: MediaQuery.of(context).size.width < 400 ? 24 : 30,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -944,7 +1027,9 @@ class _SavedTripDetailsScreen extends StatelessWidget {
             ),
           ),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(
+              MediaQuery.of(context).size.width < 400 ? 16 : 24,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -961,7 +1046,7 @@ class _SavedTripDetailsScreen extends StatelessWidget {
                       child: Text(
                         city.toString(),
                         style: TextStyle(
-                          fontSize: 30,
+                          fontSize: MediaQuery.of(context).size.width < 400 ? 24 : 30,
                           fontWeight: FontWeight.w900,
                           color: isDark ? Colors.white : Colors.black,
                         ),

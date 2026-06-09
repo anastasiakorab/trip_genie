@@ -45,7 +45,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'cover'
-        ..style.borderRadius = '24px'
+        ..style.borderRadius = '22px'
         ..style.backgroundColor = 'black';
 
       ui_web.platformViewRegistry.registerViewFactory(
@@ -77,7 +77,7 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
       if (!mounted) return;
 
       cameraProvider.setReady(true);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       cameraProvider.setError(
@@ -98,8 +98,8 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
     final height = video.videoHeight > 0 ? video.videoHeight : 640;
 
     final canvas = html.CanvasElement(width: width, height: height);
-
     final canvasContext = canvas.context2D;
+
     canvasContext.drawImageScaled(video, 0, 0, width, height);
 
     final dataUrl = canvas.toDataUrl('image/png');
@@ -131,13 +131,20 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
   Widget build(BuildContext context) {
     final cameraProvider = Provider.of<WebCameraProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 700;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
       body: SafeArea(
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(22),
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 16 : 22,
+            isMobile ? 16 : 22,
+            isMobile ? 16 : 22,
+            isMobile ? 18 : 22,
+          ),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDark
@@ -157,43 +164,29 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
           ),
           child: Column(
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Take Profile Photo',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
+              _header(isDark: isDark, isMobile: isMobile),
+              SizedBox(height: isMobile ? 14 : 20),
               Expanded(
                 child: Container(
                   width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 720),
                   decoration: BoxDecoration(
                     color: Colors.black,
-                    borderRadius: BorderRadius.circular(26),
+                    borderRadius: BorderRadius.circular(isMobile ? 22 : 26),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(26),
+                    borderRadius: BorderRadius.circular(isMobile ? 22 : 26),
                     child: cameraProvider.errorMessage != null
                         ? Center(
                             child: Padding(
-                              padding: const EdgeInsets.all(24),
+                              padding: EdgeInsets.all(isMobile ? 18 : 24),
                               child: Text(
                                 cameraProvider.errorMessage!,
                                 textAlign: TextAlign.center,
@@ -214,33 +207,88 @@ class _WebCameraScreenState extends State<WebCameraScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: ElevatedButton.icon(
-                  onPressed: cameraProvider.isCameraReady
-                      ? _capturePhoto
-                      : null,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text(
-                    'Capture Photo',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
+              SizedBox(height: isMobile ? 16 : 22),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: isMobile ? 54 : 58,
+                  child: ElevatedButton.icon(
+                    onPressed: cameraProvider.isCameraReady
+                        ? _capturePhoto
+                        : null,
+                    icon: const Icon(Icons.camera_alt),
+                    label: Text(
+                      'Capture Photo',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: isMobile ? 15 : 16,
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6D5DFF),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D5DFF),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(isMobile ? 18 : 20),
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header({
+    required bool isDark,
+    required bool isMobile,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(isMobile ? 14 : 18),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF1E293B).withValues(alpha: 0.82)
+              : Colors.white.withValues(alpha: 0.90),
+          borderRadius: BorderRadius.circular(isMobile ? 22 : 26),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              icon: Icon(
+                Icons.arrow_back,
+                color: isDark ? Colors.white : const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Take Profile Photo',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: isMobile ? 21 : 26,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF111827),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

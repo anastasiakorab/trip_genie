@@ -18,8 +18,7 @@ class FavoritesScreen extends StatelessWidget {
   Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> _groupByCity(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
-    final grouped =
-        <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+    final grouped = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
 
     for (final doc in docs) {
       final data = doc.data();
@@ -33,81 +32,94 @@ class FavoritesScreen extends StatelessWidget {
     return grouped;
   }
 
+  bool _isMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width < 600;
+  }
+
+  bool _isSmallMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width < 390;
+  }
+
   @override
-Widget build(BuildContext context) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = _isMobile(context);
 
-  return SafeArea(
-    child: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [
-                  const Color(0xFF0F172A),
-                  const Color(0xFF1E1B4B),
-                  const Color(0xFF312E81),
-                ]
-              : [
-                  const Color(0xFFF8FAFC),
-                  const Color(0xFFEDE9FE),
-                  const Color(0xFFFDF2F8),
-                ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    const Color(0xFF0F172A),
+                    const Color(0xFF1E1B4B),
+                    const Color(0xFF312E81),
+                  ]
+                : [
+                    const Color(0xFFF8FAFC),
+                    const Color(0xFFEDE9FE),
+                    const Color(0xFFFDF2F8),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
         ),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(),
-            const SizedBox(height: 24),
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirestoreService.favoritePlacesStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return _emptyState(context);
-                }
-
-                final groupedPlaces = _groupByCity(snapshot.data!.docs);
-
-                return Column(
-                  children: groupedPlaces.entries.map((entry) {
-                    final city = entry.key;
-                    final places = entry.value;
-
-                    return _cityDropdown(
-                      context: context,
-                      city: city,
-                      places: places,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 14 : 22,
+            isMobile ? 16 : 22,
+            isMobile ? 14 : 22,
+            24,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _header(context),
+              SizedBox(height: isMobile ? 18 : 24),
+              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirestoreService.favoritePlacesStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: CircularProgressIndicator(),
+                      ),
                     );
-                  }).toList(),
-                );
-              },
-            ),
-          ],
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return _emptyState(context);
+                  }
+
+                  final groupedPlaces = _groupByCity(snapshot.data!.docs);
+
+                  return Column(
+                    children: groupedPlaces.entries.map((entry) {
+                      return _cityDropdown(
+                        context: context,
+                        city: entry.key,
+                        places: entry.value,
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-  Widget _header() {
+  Widget _header(BuildContext context) {
+    final isMobile = _isMobile(context);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(26),
+      padding: EdgeInsets.all(isMobile ? 18 : 26),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(isMobile ? 26 : 34),
         gradient: const LinearGradient(
           colors: [
             Color(0xFF6D5DFF),
@@ -118,38 +130,42 @@ Widget build(BuildContext context) {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6D5DFF).withOpacity(0.30),
-            blurRadius: 26,
-            offset: const Offset(0, 14),
+            color: const Color(0xFF6D5DFF).withValues(alpha: 0.30),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         children: [
           Icon(
             Icons.favorite,
             color: Colors.white,
-            size: 44,
+            size: isMobile ? 34 : 44,
           ),
-          SizedBox(width: 18),
+          SizedBox(width: isMobile ? 12 : 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Favorite Places',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 32,
+                    fontSize: isMobile ? 25 : 32,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Text(
-                  'Places you saved from your AI trip plans.',
+                  'Places saved from your AI trip plans.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 15,
+                    fontSize: isMobile ? 13 : 15,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -162,90 +178,95 @@ Widget build(BuildContext context) {
   }
 
   Widget _cityDropdown({
-  required BuildContext context,
-  required String city,
-  required List<QueryDocumentSnapshot<Map<String, dynamic>>> places,
-}) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+    required BuildContext context,
+    required String city,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> places,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = _isMobile(context);
 
-  return Container(
-    margin: const EdgeInsets.only(bottom: 18),
-    decoration: BoxDecoration(
-      color: isDark
-          ? const Color(0xFF1E293B).withOpacity(.92)
-          : Colors.white.withOpacity(0.90),
-      borderRadius: BorderRadius.circular(28),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.06),
-          blurRadius: 18,
-          offset: const Offset(0, 8),
-        ),
-      ],
-    ),
-    child: Theme(
-      data: Theme.of(context).copyWith(
-        dividerColor: Colors.transparent,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1E293B).withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.90),
+        borderRadius: BorderRadius.circular(isMobile ? 24 : 28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: ExpansionTile(
-        initiallyExpanded: false,
-        tilePadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 8,
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withOpacity(.12)
-                : const Color(0xFFEDE9FE),
-            shape: BoxShape.circle,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          tilePadding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 14 : 18,
+            vertical: isMobile ? 5 : 8,
           ),
-          child: const Icon(
-            Icons.location_on_rounded,
-            color: Color(0xFF6D5DFF),
+          childrenPadding: EdgeInsets.fromLTRB(
+            isMobile ? 10 : 14,
+            0,
+            isMobile ? 10 : 14,
+            isMobile ? 12 : 16,
           ),
-        ),
-        title: Text(
-          city,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
-            color: isDark ? Colors.white : const Color(0xFF111827),
+          leading: Container(
+            width: isMobile ? 38 : 42,
+            height: isMobile ? 38 : 42,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : const Color(0xFFEDE9FE),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.location_on_rounded,
+              color: Color(0xFF6D5DFF),
+            ),
           ),
-        ),
-        subtitle: Text(
-          '${places.length} saved places',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white70 : const Color(0xFF64748B),
+          title: Text(
+            city,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: isMobile ? 18 : 21,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : const Color(0xFF111827),
+            ),
           ),
-        ),
-        iconColor: const Color(0xFF6D5DFF),
-        collapsedIconColor: const Color(0xFF6D5DFF),
-        children: places.map((doc) {
-          final data = doc.data();
+          subtitle: Text(
+            '${places.length} saved places',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: isMobile ? 12 : 14,
+              color: isDark ? Colors.white70 : const Color(0xFF64748B),
+            ),
+          ),
+          iconColor: const Color(0xFF6D5DFF),
+          collapsedIconColor: const Color(0xFF6D5DFF),
+          children: places.map((doc) {
+            final data = doc.data();
 
-          return _favoriteCard(
-            context: context,
-            placeId: data['placeId'] ?? doc.id,
-            name: data['name'] ?? 'Favorite place',
-            address: data['address'] ?? '',
-            category: data['category'] ?? 'Place',
-            imageUrl: data['imageUrl'],
-            rating: (data['rating'] as num?)?.toDouble(),
-            latitude: (data['latitude'] as num?)?.toDouble() ?? 0,
-            longitude: (data['longitude'] as num?)?.toDouble() ?? 0,
-          );
-        }).toList(),
+            return _favoriteCard(
+              context: context,
+              placeId: data['placeId'] ?? doc.id,
+              name: data['name'] ?? 'Favorite place',
+              address: data['address'] ?? '',
+              category: data['category'] ?? 'Place',
+              imageUrl: data['imageUrl'],
+              rating: (data['rating'] as num?)?.toDouble(),
+              latitude: (data['latitude'] as num?)?.toDouble() ?? 0,
+              longitude: (data['longitude'] as num?)?.toDouble() ?? 0,
+            );
+          }).toList(),
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _favoriteCard({
     required BuildContext context,
@@ -258,21 +279,24 @@ Widget build(BuildContext context) {
     required double latitude,
     required double longitude,
   }) {
+    final isMobile = _isMobile(context);
+    final isSmall = _isSmallMobile(context);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      height: 250,
+      margin: const EdgeInsets.only(bottom: 14),
+      height: isSmall ? 230 : isMobile ? 242 : 250,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(isMobile ? 24 : 30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.09),
+            color: Colors.black.withValues(alpha: 0.09),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(isMobile ? 24 : 30),
         child: Stack(
           children: [
             Positioned.fill(
@@ -291,8 +315,8 @@ Widget build(BuildContext context) {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Colors.black.withOpacity(0.08),
-                      Colors.black.withOpacity(0.78),
+                      Colors.black.withValues(alpha: 0.08),
+                      Colors.black.withValues(alpha: 0.80),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -301,29 +325,27 @@ Widget build(BuildContext context) {
               ),
             ),
             Positioned(
-              top: 16,
-              right: 16,
+              top: 14,
+              right: 14,
               child: InkWell(
                 onTap: () async {
                   await FirestoreService.removeFavoritePlace(placeId);
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Removed from favorites'),
-                      ),
+                      const SnackBar(content: Text('Removed from favorites')),
                     );
                   }
                 },
                 borderRadius: BorderRadius.circular(30),
                 child: Container(
-                  width: 46,
-                  height: 46,
+                  width: isMobile ? 42 : 46,
+                  height: isMobile ? 42 : 46,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.38),
+                    color: Colors.black.withValues(alpha: 0.38),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.30),
+                      color: Colors.white.withValues(alpha: 0.30),
                     ),
                   ),
                   child: const Icon(
@@ -334,32 +356,34 @@ Widget build(BuildContext context) {
               ),
             ),
             Positioned(
-              left: 20,
-              right: 20,
-              bottom: 18,
+              left: isMobile ? 16 : 20,
+              right: isMobile ? 16 : 20,
+              bottom: isMobile ? 14 : 18,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _categoryChip(category),
-                  const SizedBox(height: 10),
+                  _categoryChip(context, category),
+                  SizedBox(height: isMobile ? 8 : 10),
                   Text(
                     name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 25,
+                      fontSize: isMobile ? 21 : 25,
+                      height: 1.05,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  SizedBox(height: isMobile ? 5 : 7),
                   if (rating != null)
                     Row(
                       children: [
                         const Icon(
                           Icons.star_rounded,
                           color: Color(0xFFFBBF24),
-                          size: 21,
+                          size: 20,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -371,7 +395,7 @@ Widget build(BuildContext context) {
                         ),
                       ],
                     ),
-                  const SizedBox(height: 7),
+                  SizedBox(height: isMobile ? 5 : 7),
                   Text(
                     address,
                     maxLines: 1,
@@ -381,25 +405,28 @@ Widget build(BuildContext context) {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: latitude == 0 && longitude == 0
-                        ? null
-                        : () => _openInMaps(latitude, longitude),
-                    icon: const Icon(Icons.map_outlined, size: 18),
-                    label: const Text(
-                      'Open in Maps',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white54,
-                      side: BorderSide(
-                        color: Colors.white.withOpacity(0.65),
+                  SizedBox(height: isMobile ? 9 : 12),
+                  SizedBox(
+                    height: isMobile ? 38 : 42,
+                    child: OutlinedButton.icon(
+                      onPressed: latitude == 0 && longitude == 0
+                          ? null
+                          : () => _openInMaps(latitude, longitude),
+                      icon: const Icon(Icons.map_outlined, size: 17),
+                      label: Text(
+                        isMobile ? 'Maps' : 'Open in Maps',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
-                      backgroundColor: Colors.white.withOpacity(0.12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        disabledForegroundColor: Colors.white54,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.65),
+                        ),
+                        backgroundColor: Colors.white.withValues(alpha: 0.12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                     ),
                   ),
@@ -412,64 +439,75 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _categoryChip(String category) {
+  Widget _categoryChip(BuildContext context, String category) {
+    final isMobile = _isMobile(context);
+
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 13,
-        vertical: 7,
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 11 : 13,
+        vertical: isMobile ? 6 : 7,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(
-          color: Colors.white.withOpacity(0.25),
+          color: Colors.white.withValues(alpha: 0.25),
         ),
       ),
       child: Text(
         category,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
-          fontSize: 12,
+          fontSize: isMobile ? 11 : 12,
         ),
       ),
     );
   }
 
   Widget _emptyState(BuildContext context) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = _isMobile(context);
 
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(30),
-    decoration: BoxDecoration(
-      color: isDark
-          ? const Color(0xFF1E293B)
-          : Colors.white.withOpacity(0.92),
-      borderRadius: BorderRadius.circular(32),
-    ),
-    child: Column(
-      children: [
-        const Icon(
-          Icons.favorite_border,
-          size: 70,
-          color: Color(0xFF6D5DFF),
-        ),
-        const SizedBox(height: 18),
-        Text(
-          'No favorites yet',
-          style: TextStyle(
-            fontSize: 25,
-            fontWeight: FontWeight.w900,
-            color: isDark
-                ? Colors.white
-                : const Color(0xFF111827),
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 24 : 30),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1E293B)
+            : Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(isMobile ? 26 : 32),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.favorite_border,
+            size: isMobile ? 58 : 70,
+            color: const Color(0xFF6D5DFF),
           ),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(height: 18),
+          Text(
+            'No favorites yet',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: isMobile ? 22 : 25,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : const Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Save places from your generated trips and they will appear here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isDark ? Colors.white70 : const Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _fallback(String category) {
     return Container(
@@ -496,6 +534,20 @@ Widget build(BuildContext context) {
         return Icons.shopping_bag;
       case 'Nightlife':
         return Icons.nightlife;
+      case 'Concerts':
+        return Icons.music_note;
+      case 'Sports':
+        return Icons.sports_soccer;
+      case 'History':
+        return Icons.account_balance;
+      case 'Art':
+        return Icons.palette;
+      case 'Beaches':
+        return Icons.beach_access;
+      case 'Adventure':
+        return Icons.hiking;
+      case 'Family':
+        return Icons.family_restroom;
       default:
         return Icons.place;
     }
