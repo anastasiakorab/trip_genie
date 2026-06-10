@@ -750,7 +750,7 @@ class _PlanScreenState extends State<PlanScreen> {
               : dailyBudget < 200
               ? 30
               : 55,
-          source: 'Fallback restaurant estimate based on selected budget style',
+          source: 'Estimated based on restaurant category and selected budget style',
           group: 'Food & drinks',
           includeInDayTotal: true,
         );
@@ -763,7 +763,7 @@ class _PlanScreenState extends State<PlanScreen> {
               ? 35
               : 70,
           source:
-              'Fallback bar/nightlife estimate based on selected budget style',
+              'Estimated based on nightlife category and selected budget style',
           group: 'Food & drinks',
           includeInDayTotal: true,
         );

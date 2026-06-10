@@ -1,1 +1,39 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tripgenie-project-finki","appId":"1:981176022677:android:47f90eecb64518690b8d9c","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tripgenie-project-finki","configurations":{"android":"1:981176022677:android:47f90eecb64518690b8d9c","ios":"1:981176022677:ios:38571fa0b23d6b860b8d9c","macos":"1:981176022677:ios:38571fa0b23d6b860b8d9c","web":"1:981176022677:web:8f127b905462fe020b8d9c","windows":"1:981176022677:web:7d70f3224f1a7db10b8d9c"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tripgenie-project-finki",
+          "appId": "1:981176022677:android:47f90eecb64518690b8d9c",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tripgenie-project-finki",
+          "configurations": {
+            "android": "1:981176022677:android:47f90eecb64518690b8d9c",
+            "ios": "1:981176022677:ios:38571fa0b23d6b860b8d9c",
+            "macos": "1:981176022677:ios:38571fa0b23d6b860b8d9c",
+            "web": "1:981176022677:web:8f127b905462fe020b8d9c",
+            "windows": "1:981176022677:web:7d70f3224f1a7db10b8d9c"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

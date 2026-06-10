@@ -183,6 +183,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             child: IconButton(
               padding: EdgeInsets.zero,
+              tooltip: 'Back',
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back, color: Colors.white),
             ),

@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import 'package:trip_genie/providers/auth_form_provider.dart';
 import 'package:trip_genie/providers/web_camera_provider.dart';
 
@@ -25,37 +28,139 @@ import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-Future<void> setupNotifications() async {
-  final messaging = FirebaseMessaging.instance;
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
-  await messaging.requestPermission(alert: true, badge: true, sound: true);
+const AndroidNotificationChannel androidNotificationChannel =
+    AndroidNotificationChannel(
+  'tripgenie_channel',
+  'TripGenie Notifications',
+  description: 'Notifications for TripGenie travel updates',
+  importance: Importance.high,
+);
 
-  final token = await messaging.getToken();
-  debugPrint("FCM TOKEN: $token");
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
+  debugPrint('Background push received');
+  debugPrint(message.notification?.title);
+  debugPrint(message.notification?.body);
+}
+
+Future<void> initializeLocalNotifications() async {
+  const AndroidInitializationSettings androidSettings =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+
+  const InitializationSettings settings = InitializationSettings(
+    android: androidSettings,
+    iOS: iosSettings,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(settings);
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(androidNotificationChannel);
+}
+
+Future<void> showForegroundNotification(RemoteMessage message) async {
+  final notification = message.notification;
+
+  if (notification == null) return;
+
+  await flutterLocalNotificationsPlugin.show(
+    notification.hashCode,
+    notification.title ?? 'TripGenie',
+    notification.body ?? 'You have a new notification',
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        androidNotificationChannel.id,
+        androidNotificationChannel.name,
+        channelDescription: androidNotificationChannel.description,
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+      iOS: const DarwinNotificationDetails(),
+    ),
+  );
+}
+
+Future<void> saveFcmTokenToFirestore(String? token) async {
   final user = FirebaseAuth.instance.currentUser;
 
   if (user != null && token != null) {
     await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
       'fcmToken': token,
+      'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+}
 
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    debugPrint('Push received');
-    debugPrint(message.notification?.title);
-    debugPrint(message.notification?.body);
+Future<void> setupNotifications() async {
+  final messaging = FirebaseMessaging.instance;
+
+  final settings = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  debugPrint('Notification permission: ${settings.authorizationStatus}');
+
+  final token = await messaging.getToken();
+  debugPrint('FCM TOKEN: $token');
+
+  await saveFcmTokenToFirestore(token);
+
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+    debugPrint('FCM TOKEN REFRESHED: $newToken');
+    await saveFcmTokenToFirestore(newToken);
   });
+
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    debugPrint('Foreground push received');
+    debugPrint('Title: ${message.notification?.title}');
+    debugPrint('Body: ${message.notification?.body}');
+
+    if (!kIsWeb) {
+      await showForegroundNotification(message);
+    }
+  });
+
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    debugPrint('Notification opened from background');
+    debugPrint('Title: ${message.notification?.title}');
+  });
+
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+
+  if (initialMessage != null) {
+    debugPrint('App opened from terminated state by notification');
+    debugPrint('Title: ${initialMessage.notification?.title}');
+  }
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(
-    fileName: ".env",
+  await dotenv.load(fileName: ".env");
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  if (!kIsWeb) {
+    await initializeLocalNotifications();
+  }
 
   await setupNotifications();
 

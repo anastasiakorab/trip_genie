@@ -52,77 +52,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
- Future<void> _pickImage() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+  Future<void> _pickImage() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  final source = await showModalBottomSheet<String>(
-    context: context,
-    builder: (_) {
-      return SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Take Photo'),
-              subtitle: const Text('Open phone camera'),
-              onTap: () {
-                Navigator.pop(context, 'camera');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Choose from Gallery'),
-              onTap: () {
-                Navigator.pop(context, 'gallery');
-              },
-            ),
-          ],
-        ),
-      );
-    },
-  );
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Take Photo'),
+                subtitle: const Text('Open phone camera'),
+                onTap: () {
+                  Navigator.pop(context, 'camera');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(context, 'gallery');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
 
-  if (source == null) return;
+    if (source == null) return;
 
-  final picked = await ImagePicker().pickImage(
-    source: source == 'camera'
-        ? ImageSource.camera
-        : ImageSource.gallery,
-    imageQuality: 45,
-    maxWidth: 300,
-    maxHeight: 300,
-  );
+    final picked = await ImagePicker().pickImage(
+      source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+      imageQuality: 45,
+      maxWidth: 300,
+      maxHeight: 300,
+    );
 
-  if (!mounted) return;
-  if (picked == null) return;
+    if (!mounted) return;
+    if (picked == null) return;
 
-  final bytes = await picked.readAsBytes();
+    final bytes = await picked.readAsBytes();
 
-  final base64Image = base64Encode(bytes);
+    final base64Image = base64Encode(bytes);
 
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(user.uid)
-      .set({
-    'profileImageBase64': base64Image,
-    'updatedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'profileImageBase64': base64Image,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  Provider.of<ProfileProvider>(
-    context,
-    listen: false,
-  ).setProfileImage(bytes);
+    Provider.of<ProfileProvider>(context, listen: false).setProfileImage(bytes);
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Profile photo updated'),
-    ),
-  );
-}
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -417,7 +407,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const Scaffold(body: FavoritesScreen()),
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Favorite Places')),
+                    body: const FavoritesScreen(),
+                  ),
                 ),
               );
             },
@@ -1046,7 +1039,9 @@ class _SavedTripDetailsScreen extends StatelessWidget {
                       child: Text(
                         city.toString(),
                         style: TextStyle(
-                          fontSize: MediaQuery.of(context).size.width < 400 ? 24 : 30,
+                          fontSize: MediaQuery.of(context).size.width < 400
+                              ? 24
+                              : 30,
                           fontWeight: FontWeight.w900,
                           color: isDark ? Colors.white : Colors.black,
                         ),
