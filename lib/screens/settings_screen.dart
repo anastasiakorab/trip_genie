@@ -43,12 +43,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final imageBase64 = doc.data()?['profileImageBase64'];
 
+    if (!mounted) return;
+
     if (imageBase64 != null && imageBase64.toString().isNotEmpty) {
-      if (!mounted) return;
       Provider.of<ProfileProvider>(
         context,
         listen: false,
       ).setProfileImage(base64Decode(imageBase64));
+    } else {
+      // Clear profile image if new user has no image
+      Provider.of<ProfileProvider>(context, listen: false).clearProfileImage();
     }
   }
 
@@ -86,32 +90,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (source == null) return;
 
-    final picked = await ImagePicker().pickImage(
-      source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
-      imageQuality: 45,
-      maxWidth: 300,
-      maxHeight: 300,
-    );
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+        imageQuality: 45,
+        maxWidth: 300,
+        maxHeight: 300,
+      );
 
-    if (!mounted) return;
-    if (picked == null) return;
+      if (!mounted) return;
+      if (picked == null) return;
 
-    final bytes = await picked.readAsBytes();
+      final bytes = await picked.readAsBytes();
 
-    final base64Image = base64Encode(bytes);
+      final base64Image = base64Encode(bytes);
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-      'profileImageBase64': base64Image,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'profileImageBase64': base64Image,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    Provider.of<ProfileProvider>(context, listen: false).setProfileImage(bytes);
+      Provider.of<ProfileProvider>(context, listen: false).setProfileImage(bytes);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      debugPrint('Image picker error: $e');
+    }
   }
 
   @override

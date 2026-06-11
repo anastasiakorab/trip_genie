@@ -66,5 +66,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TripGenie needs your location to help you plan trips and find nearby attractions.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>TripGenie needs your location to help you plan trips and find nearby attractions.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TripGenie needs camera access to take photos for your profile picture.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TripGenie needs permission to access your photo library.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>TripGenie needs permission to save photos.</string>
+	<key>com.google.ios.API_KEY</key>
+	<string>AIzaSyBGDR5aec5PIFLNRSI1uBiRUy-xMp-74KU</string>
 </dict>
 </plist>

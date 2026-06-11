@@ -114,10 +114,39 @@ Future<void> setupNotifications() async {
 
   debugPrint('Notification permission: ${settings.authorizationStatus}');
 
-  final token = await messaging.getToken();
-  debugPrint('FCM TOKEN: $token');
+  // Wait for APNS token to be set before getting FCM token
+  await Future.delayed(const Duration(seconds: 2));
 
-  await saveFcmTokenToFirestore(token);
+  String? token;
+  int retries = 0;
+  const int maxRetries = 5;
+  
+  // Retry getting the token with exponential backoff
+  while (token == null && retries < maxRetries) {
+    try {
+      token = await messaging.getToken();
+      if (token != null) {
+        break;
+      } else {
+        debugPrint('FCM token is null (attempt ${retries + 1}/$maxRetries)');
+      }
+    } catch (e) {
+      debugPrint('Error getting FCM token (attempt ${retries + 1}/$maxRetries): $e');
+    }
+    
+    retries++;
+    if (retries < maxRetries) {
+      // Increase delay between retries (3s, 5s, 7s, 9s, 11s)
+      await Future.delayed(Duration(seconds: 2 + (retries * 2)));
+    }
+  }
+  
+  if (token != null) {
+    debugPrint('FCM TOKEN: $token');
+    await saveFcmTokenToFirestore(token);
+  } else {
+    debugPrint('Failed to get FCM token after $maxRetries attempts');
+  }
 
   FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
     debugPrint('FCM TOKEN REFRESHED: $newToken');
@@ -232,6 +261,13 @@ class MainNavigationScreen extends StatelessWidget {
 
   Future<void> _logout(BuildContext context, AppStateProvider appState) async {
     appState.resetOnLogout();
+    // Clear all user-specific state on logout
+    if (context.mounted) {
+      Provider.of<ProfileProvider>(context, listen: false).clearProfileImage();
+      Provider.of<FavoritesProvider>(context, listen: false).clear();
+      Provider.of<CreateTripProvider>(context, listen: false).resetCreateTrip();
+      Provider.of<PlanProvider>(context, listen: false).clear();
+    }
     await AuthService.logout();
   }
 
